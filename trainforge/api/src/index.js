@@ -1,5 +1,5 @@
 // File: trainforge/api/src/index.js
-// Main Express server for TrainForge API
+// Main Express server for TrainForge API with MongoDB
 
 const express = require('express');
 const cors = require('cors');
@@ -8,8 +8,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-// Import Firebase and routes
-const firebaseDB = require('./db/firebase');
+// Import MongoDB and routes
+const mongoDB = require('./db/mongodb');
 const jobRoutes = require('./routes/jobs');
 
 const app = express();
@@ -50,7 +50,8 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '0.1.0',
-        service: 'trainforge-api'
+        service: 'trainforge-api',
+        database: mongoDB.isConnected ? 'connected' : 'disconnected'
     });
 });
 
@@ -62,10 +63,10 @@ app.get('/', (req, res) => {
     res.json({
         message: 'TrainForge API Server',
         version: '0.1.0',
+        database: 'MongoDB',
         endpoints: {
             health: '/health',
-            jobs: '/api/jobs',
-            docs: '/api/docs'
+            jobs: '/api/jobs'
         }
     });
 });
@@ -89,19 +90,19 @@ app.use((error, req, res, next) => {
     });
 });
 
-// Initialize Firebase and start server
+// Initialize MongoDB and start server
 async function startServer() {
     try {
         console.log('🚀 Starting TrainForge API Server...');
         
-        // Initialize Firebase
-        await firebaseDB.initialize();
+        // Connect to MongoDB
+        await mongoDB.connect();
         
         // Start listening
         app.listen(PORT, () => {
             console.log(`✅ Server running on http://localhost:${PORT}`);
             console.log(`📊 Health check: http://localhost:${PORT}/health`);
-            console.log('🔥 Firebase connected successfully');
+            console.log('🍃 MongoDB connected successfully');
         });
         
     } catch (error) {
@@ -111,13 +112,15 @@ async function startServer() {
 }
 
 // Handle graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     console.log('👋 SIGTERM received, shutting down gracefully');
+    await mongoDB.disconnect();
     process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('👋 SIGINT received, shutting down gracefully');
+    await mongoDB.disconnect();
     process.exit(0);
 });
 

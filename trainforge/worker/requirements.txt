@@ -1,0 +1,8 @@
+# File: trainforge/worker/requirements.txt
+# Python dependencies for TrainForge Worker
+
+requests>=2.28.0      # HTTP client for API calls
+pyyaml>=6.0           # YAML configuration parsing
+psutil>=5.9.0         # System monitoring
+zipfile38>=0.0.3      # ZIP file handling
+pathlib>=1.0.1        # Path handling

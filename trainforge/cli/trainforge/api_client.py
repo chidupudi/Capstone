@@ -29,13 +29,19 @@ class TrainForgeAPIClient:
     
     def submit_job(self, config: Dict[str, Any], project_files: str) -> Dict[str, Any]:
         """Submit a training job to the API"""
+        zip_path = None
+        file_handle = None
+        
         try:
             # Create a zip file of the project
             zip_path = self._create_project_zip(project_files)
             
+            # Open file handle
+            file_handle = open(zip_path, 'rb')
+            
             # Prepare the job submission
             files = {
-                'project_zip': ('project.zip', open(zip_path, 'rb'), 'application/zip')
+                'project_zip': ('project.zip', file_handle, 'application/zip')
             }
             
             data = {
@@ -49,10 +55,6 @@ class TrainForgeAPIClient:
                 timeout=30
             )
             
-            # Cleanup
-            os.unlink(zip_path)
-            files['project_zip'][1].close()
-            
             if response.status_code == 201:
                 return response.json()
             else:
@@ -60,6 +62,22 @@ class TrainForgeAPIClient:
                 
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to connect to API server: {e}")
+        
+        finally:
+            # Ensure proper cleanup
+            if file_handle:
+                file_handle.close()
+            if zip_path and os.path.exists(zip_path):
+                try:
+                    os.unlink(zip_path)
+                except (OSError, PermissionError):
+                    # On Windows, sometimes need to wait a moment
+                    import time
+                    time.sleep(0.1)
+                    try:
+                        os.unlink(zip_path)
+                    except (OSError, PermissionError):
+                        print(f"Warning: Could not delete temporary file {zip_path}")
     
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """Get status of a specific job"""
