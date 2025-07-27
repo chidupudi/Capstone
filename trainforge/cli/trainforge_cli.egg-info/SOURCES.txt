@@ -1,0 +1,15 @@
+setup.py
+trainforge/__init__.py
+trainforge/api_client.py
+trainforge/config.py
+trainforge/main.py
+trainforge/commands/__init__.py
+trainforge/commands/init.py
+trainforge/commands/push.py
+trainforge/commands/status.py
+trainforge_cli.egg-info/PKG-INFO
+trainforge_cli.egg-info/SOURCES.txt
+trainforge_cli.egg-info/dependency_links.txt
+trainforge_cli.egg-info/entry_points.txt
+trainforge_cli.egg-info/requires.txt
+trainforge_cli.egg-info/top_level.txt
