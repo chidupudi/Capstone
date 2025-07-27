@@ -59,7 +59,7 @@ from torch.utils.data import DataLoader
 
 def main():
     """Main training function"""
-    print("🚀 Starting training...")
+    print("Starting training...")
     
     # TODO: Add your model, data loading, and training logic here
     
@@ -79,11 +79,11 @@ def main():
     #         if batch_idx % 100 == 0:
     #             print(f'Epoch: {epoch}, Batch: {batch_idx}, Loss: {loss.item():.4f}')
     
-    print("✅ Training completed!")
+    print("Training completed!")
 
 if __name__ == "__main__":
     main()
 '''
     
-    with open('train.py', 'w') as f:
+    with open('train.py', 'w', encoding='utf-8') as f:
         f.write(template)
