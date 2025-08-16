@@ -3,7 +3,7 @@ environment:
   python_version: '3.9'
 project:
   description: AI training project created with TrainForge
-  name: test
+  name: capstone-test
 resources:
   cpu: 2
   gpu: 1
