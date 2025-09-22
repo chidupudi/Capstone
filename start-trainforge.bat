@@ -30,7 +30,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 REM Check if MongoDB is running
 echo 🔍 Checking MongoDB connection...
-mongosh --eval "db.runCommand({ping:1})" --quiet >nul 2>nul
+sc query MongoDB | findstr "RUNNING" >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ MongoDB not running. Please start MongoDB service first.
     echo    You can start it with: net start MongoDB

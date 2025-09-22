@@ -15,8 +15,16 @@ import subprocess
 import os
 
 from .gpu_manager import gpu_manager, GPUStatus
+from .cpu_manager import cpu_manager
 from .container_manager import ContainerManager
-from .distributed_trainer import DistributedTrainer
+from .distributed_processor import distributed_processor
+try:
+    from .distributed_trainer import DistributedTrainer
+except ImportError:
+    # Fallback if distributed_trainer doesn't exist
+    class DistributedTrainer:
+        def start_distributed_training(self, *args, **kwargs):
+            return None
 
 class JobPriority(Enum):
     LOW = 1
@@ -230,29 +238,64 @@ class JobScheduler:
     
     def _can_schedule_job(self, job_request: JobRequest) -> bool:
         """Check if job can be scheduled with current resources"""
-        gpu_count = job_request.resource_requirements.get('gpu', 1)
+        gpu_count = job_request.resource_requirements.get('gpu', 0)
+        cpu_count = job_request.resource_requirements.get('cpu', 1)
+        memory_gb = job_request.resource_requirements.get('memory_gb', 1.0)
         memory_per_gpu = job_request.resource_requirements.get('memory_per_gpu', 4096)
         
-        return gpu_manager.can_schedule_job(gpu_count, memory_per_gpu)
+        # Check GPU resources if requested
+        gpu_available = True
+        if gpu_count > 0:
+            gpu_available = gpu_manager.can_schedule_job(gpu_count, memory_per_gpu)
+        
+        # Check CPU resources if requested
+        cpu_available = True
+        if cpu_count > 0:
+            cpu_available = cpu_manager.can_schedule_job(cpu_count, memory_gb)
+        
+        return gpu_available and cpu_available
     
     def _schedule_job(self, job_request: JobRequest) -> bool:
         """Schedule a job for execution"""
         try:
             print(f"🎯 Scheduling job {job_request.job_id}")
             
-            # Allocate GPUs
-            gpu_count = job_request.resource_requirements.get('gpu', 1)
+            # Get resource requirements
+            gpu_count = job_request.resource_requirements.get('gpu', 0)
+            cpu_count = job_request.resource_requirements.get('cpu', 1)
+            memory_gb = job_request.resource_requirements.get('memory_gb', 1.0)
             memory_per_gpu = job_request.resource_requirements.get('memory_per_gpu', 4096)
             
-            allocated_gpus = gpu_manager.allocate_gpus(
-                job_request.job_id, 
-                gpu_count, 
-                memory_per_gpu
-            )
+            allocated_gpus = []
+            allocated_cpus = []
             
-            if not allocated_gpus:
-                print(f"❌ Failed to allocate GPUs for job {job_request.job_id}")
-                return False
+            # Allocate GPUs if requested
+            if gpu_count > 0:
+                allocated_gpus = gpu_manager.allocate_gpus(
+                    job_request.job_id, 
+                    gpu_count, 
+                    memory_per_gpu
+                )
+                
+                if not allocated_gpus:
+                    print(f"❌ Failed to allocate GPUs for job {job_request.job_id}")
+                    return False
+            
+            # Allocate CPUs if requested
+            if cpu_count > 0:
+                allocated_cpus = cpu_manager.allocate_cpus(
+                    job_request.job_id,
+                    cpu_count,
+                    memory_gb,
+                    priority=job_request.priority.value
+                )
+                
+                if not allocated_cpus:
+                    print(f"❌ Failed to allocate CPUs for job {job_request.job_id}")
+                    # Clean up GPU allocation if it was successful
+                    if allocated_gpus:
+                        gpu_manager.deallocate_gpus(job_request.job_id)
+                    return False
             
             # Create scheduled job
             scheduled_job = ScheduledJob(
@@ -261,6 +304,10 @@ class JobScheduler:
                 worker_nodes=["localhost"],  # For now, single node
                 container_ids=[]
             )
+            
+            # Store CPU allocation info in the job for tracking
+            if allocated_cpus:
+                scheduled_job.allocated_cpus = allocated_cpus
             
             # Start training containers
             success = self._start_training_containers(scheduled_job)

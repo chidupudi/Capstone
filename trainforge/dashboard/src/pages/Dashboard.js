@@ -219,6 +219,14 @@ const Dashboard = ({ onNavigate }) => {
               </button>
               
               <button
+                onClick={() => onNavigate && onNavigate('distributed-monitor')}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 dark:text-purple-200 hover:text-purple-900 dark:hover:text-purple-100 hover:bg-purple-50 dark:hover:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg transition-colors"
+              >
+                <Activity className="w-4 h-4" />
+                Monitor
+              </button>
+              
+              <button
                 onClick={() => onNavigate && onNavigate('submit')}
                 className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-medium rounded-lg transition-all transform hover:scale-105 shadow-lg"
               >

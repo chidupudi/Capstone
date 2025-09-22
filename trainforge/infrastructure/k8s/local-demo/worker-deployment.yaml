@@ -1,0 +1,164 @@
+# TrainForge Distributed CPU Worker Deployment
+# Demonstrates distributed ML training across multiple K8s pods
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trainforge-cpu-workers
+  namespace: default
+  labels:
+    app: trainforge-worker
+    type: cpu-distributed
+spec:
+  replicas: 4  # 4 workers for distributed processing
+  selector:
+    matchLabels:
+      app: trainforge-worker
+  template:
+    metadata:
+      labels:
+        app: trainforge-worker
+        type: cpu-distributed
+    spec:
+      containers:
+      - name: ml-worker
+        image: python:3.9-slim
+        imagePullPolicy: IfNotPresent
+        
+        # Resource limits to demonstrate CPU distribution
+        resources:
+          requests:
+            cpu: "0.5"      # Request 0.5 CPU cores per worker
+            memory: "512Mi" # 512MB memory per worker
+          limits:
+            cpu: "1.0"      # Max 1 CPU core per worker
+            memory: "1Gi"   # Max 1GB memory per worker
+        
+        # Environment variables for distributed training
+        env:
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: WORKER_TYPE
+          value: "cpu-distributed"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: OMP_NUM_THREADS
+          value: "1"  # Prevent numpy from using multiple threads
+        
+        # Command to run distributed ML training
+        command: ["/bin/bash"]
+        args:
+        - -c
+        - |
+          pip install numpy psutil requests
+          python -c "
+          import time
+          import os
+          import numpy as np
+          import psutil
+          from datetime import datetime
+          
+          worker_id = os.environ.get('WORKER_ID', 'unknown')
+          print(f'Worker {worker_id} started at {datetime.now()}')
+          print(f'CPU cores available: {psutil.cpu_count()}')
+          print(f'Memory: {psutil.virtual_memory().total / (1024**3):.1f}GB')
+          
+          # Simulate distributed ML training workload
+          for epoch in range(5):
+              print(f'Worker {worker_id} - Epoch {epoch+1}/5')
+              
+              # CPU-intensive matrix operations (simulating ML training)
+              data = np.random.random((500, 500))
+              for batch in range(10):
+                  # Forward pass simulation
+                  weights = np.random.random((500, 100))
+                  result = np.dot(data, weights)
+                  
+                  # Backward pass simulation  
+                  gradient = np.dot(result.T, data)
+                  weights -= 0.01 * gradient[:500, :]
+                  
+                  # Log progress
+                  if batch % 3 == 0:
+                      cpu_percent = psutil.cpu_percent(interval=0.1)
+                      memory_percent = psutil.virtual_memory().percent
+                      print(f'  Batch {batch+1}/10 - CPU: {cpu_percent:.1f}% Memory: {memory_percent:.1f}%')
+              
+              # Simulate epoch completion
+              accuracy = 0.7 + (epoch * 0.05) + np.random.normal(0, 0.02)
+              loss = 0.8 - (epoch * 0.1) + np.random.normal(0, 0.05)
+              print(f'  Epoch {epoch+1} completed - Accuracy: {accuracy:.3f} Loss: {loss:.3f}')
+              time.sleep(2)  # Brief pause between epochs
+          
+          print(f'Worker {worker_id} training completed successfully!')
+          
+          # Keep container running for monitoring
+          while True:
+              time.sleep(30)
+              print(f'Worker {worker_id} - Status check at {datetime.now()}')
+          "
+        
+        # Health check
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import psutil; print('Worker healthy')"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        
+        # Readiness check
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "print('Worker ready')"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# Service to expose workers (for monitoring)
+apiVersion: v1
+kind: Service
+metadata:
+  name: trainforge-workers-service
+  labels:
+    app: trainforge-worker
+spec:
+  selector:
+    app: trainforge-worker
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: metrics
+  type: ClusterIP
+
+---
+# ConfigMap for shared training configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trainforge-training-config
+data:
+  training.yaml: |
+    training:
+      model_type: "image_classification"
+      dataset_size: 1000
+      batch_size: 32
+      epochs: 5
+      learning_rate: 0.001
+    
+    distributed:
+      workers: 4
+      coordination: "parameter_server"
+      sync_frequency: 10
+    
+    resources:
+      cpu_per_worker: "0.5"
+      memory_per_worker: "512Mi"
+      max_cpu_per_worker: "1.0"
+      max_memory_per_worker: "1Gi"

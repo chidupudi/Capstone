@@ -10,6 +10,7 @@ import { ExclamationCircleOutlined, ReloadOutlined, CheckCircleOutlined, CloseCi
 import Dashboard from './pages/Dashboard';
 import SubmitJob from './pages/SubmitJob';
 import JobDetails from './pages/JobDetails';
+import DistributedMonitor from './pages/DistributedMonitor';
 import { trainForgeAPI } from './services/api';
 
 function App() {
@@ -150,6 +151,10 @@ function App() {
             jobId={currentJobId} 
             onNavigate={handleNavigate} 
           />
+        )}
+        
+        {currentPage === 'distributed-monitor' && (
+          <DistributedMonitor onNavigate={handleNavigate} />
         )}
       </motion.div>
 

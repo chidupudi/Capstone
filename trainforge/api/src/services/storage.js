@@ -37,16 +37,36 @@ class FileStorage {
         try {
             const destinationDir = path.join(this.basePath, 'projects', projectPath);
             await fs.mkdir(destinationDir, { recursive: true });
-            
+
+            // Copy the ZIP file
             const destinationPath = path.join(destinationDir, 'project.zip');
             await fs.copyFile(sourceZipPath, destinationPath);
-            
-            console.log(`📦 Project files stored: ${destinationPath}`);
+
+            // Extract ZIP file for scheduler access
+            await this.extractProjectFiles(destinationPath, destinationDir);
+
+            console.log(`📦 Project files stored and extracted: ${destinationDir}`);
             return destinationPath;
-            
+
         } catch (error) {
             console.error('❌ Failed to store project files:', error);
             throw error;
+        }
+    }
+
+    async extractProjectFiles(zipPath, extractDir) {
+        try {
+            const AdmZip = require('adm-zip');
+            const zip = new AdmZip(zipPath);
+
+            // Extract all files
+            zip.extractAllTo(extractDir, true);
+
+            console.log(`📂 Extracted project files to: ${extractDir}`);
+
+        } catch (error) {
+            console.error('❌ Failed to extract project files:', error);
+            // Don't throw here, we still have the ZIP file
         }
     }
 
