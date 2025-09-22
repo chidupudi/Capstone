@@ -1,0 +1,45 @@
+project:
+  name: cifar100-resnet50
+  description: Distributed ResNet-50 training on CIFAR-100 dataset
+
+training:
+  script: train.py
+  requirements: requirements.txt
+
+resources:
+  gpu: 2
+  cpu: 8
+  memory: 16Gi
+
+environment:
+  python_version: '3.9'
+  base_image: pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+  env:
+    # Training hyperparameters
+    BATCH_SIZE: 256        # 128 per GPU
+    EPOCHS: 200
+    LEARNING_RATE: 0.2     # Scaled for 2 GPUs
+    WEIGHT_DECAY: 0.0001
+    MOMENTUM: 0.9
+
+    # Model configuration
+    MODEL: resnet50
+    NUM_CLASSES: 100
+
+    # Distributed training
+    DISTRIBUTED: true
+    SYNC_BN: true
+
+    # Optimization
+    MIXED_PRECISION: true
+    GRADIENT_CLIPPING: 1.0
+
+    # Logging and checkpointing
+    LOG_INTERVAL: 100
+    CHECKPOINT_INTERVAL: 20
+    SAVE_BEST: true
+
+    # Data augmentation
+    AUGMENTATION: standard
+    RANDOM_CROP: true
+    RANDOM_FLIP: true

@@ -4,38 +4,44 @@
 
 TrainForge is a complete distributed AI training platform that handles GPU allocation, container orchestration, and training execution automatically.
 
-## ⚡ Quick Start (3 Steps)
+## ⚡ Quick Start
 
-### 1. Start TrainForge Platform
+### 🚀 **Option 1: Automated (Recommended)**
 ```bash
-# Start all services
+# 1. Start all services
 ./start-trainforge.bat
-```
 
-This starts:
-- 🌐 **API Server** (localhost:3000) - Job management
-- 📊 **Dashboard** (localhost:3001) - Real-time monitoring
-- 🧠 **Scheduler** - GPU/CPU allocation & job orchestration
-- 🏃 **Workers** - Training execution
-
-### 2. Install CLI & Create Project
-```bash
-# Install CLI
-cd trainforge/cli
-pip install -e .
-
-# Create your AI project
+# 2. Install CLI & create project
+cd trainforge/cli && pip install -e .
 mkdir my-ai-project && cd my-ai-project
 trainforge init --name "my-model-training"
-```
 
-### 3. Submit Training Job
-```bash
-# Edit your train.py and trainforge.yaml, then:
+# 3. Submit job
 trainforge push
 ```
 
-**That's it!** TrainForge handles everything else automatically.
+### 🔧 **Option 2: Manual Component Control**
+```bash
+# Terminal 1: Database
+mongod --dbpath ./data/db
+
+# Terminal 2: API Server
+cd trainforge/api && npm start
+
+# Terminal 3: Dashboard
+cd trainforge/dashboard && npm start
+
+# Terminal 4: Scheduler
+cd trainforge/scheduler && python -m src.job_scheduler
+
+# Terminal 5: Worker Node
+cd trainforge/workers && python worker_node.py
+
+# Terminal 6: Submit Jobs
+cd my-project && trainforge push
+```
+
+**📖 [Full Setup Guide](./SETUP.md)** | **🏃 [Worker Nodes Guide](./trainforge/workers/README.md)**
 
 ## 📁 Project Structure
 
@@ -171,7 +177,19 @@ trainforge --help                         # Show help
 ✅ **Real-time Monitoring** - Live dashboard and CLI status
 ✅ **Resource Management** - CPU/GPU allocation and monitoring
 ✅ **Job Scheduling** - Priority-based queue management
+✅ **Worker Nodes** - Scalable distributed execution
 ✅ **External GPU Ready** - Connect to cloud GPUs
+
+## 🧪 **Complete ML Example**
+
+**[Distributed Image Classification](./examples/distributed-image-classification/)** - ResNet-50 on CIFAR-100
+
+Perfect showcase of TrainForge's power:
+- **Multi-GPU Training**: Automatic distributed training setup
+- **Resource Optimization**: 90%+ GPU utilization
+- **Easy Scaling**: Single YAML change: `gpu: 1` → `gpu: 8`
+- **Real-time Monitoring**: Live training metrics and progress
+- **Fault Tolerance**: Automatic checkpointing and recovery
 
 ## 🔧 Prerequisites
 
