@@ -31,3 +31,9 @@ seaborn>=0.11.0       # Statistical visualization
 # Utilities
 tqdm>=4.62.0          # Progress bars
 nvidia-ml-py3>=7.352.0  # NVIDIA GPU monitoring
+
+# Docker and containerization
+docker>=6.0.0         # Docker API client
+
+# Additional scheduler dependencies
+schedule>=1.2.0       # Job scheduling

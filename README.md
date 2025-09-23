@@ -31,7 +31,7 @@ trainforge push
 # 2. Setup environment & create project
 cd trainforge\cli
 .\set_env.ps1
-mkdir my-ai-project; cd my-ai-project
+New-Item -ItemType Directory -Name "my-ai-project" -Force | Out-Null; cd my-ai-project
 trainforge init --name "my-model-training"
 
 # 3. Submit job

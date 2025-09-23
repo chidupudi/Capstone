@@ -1,0 +1,15 @@
+Collecting docker
+  Downloading docker-7.1.0-py3-none-any.whl (147 kB)
+     -------------------------------------- 147.8/147.8 KB 1.5 MB/s eta 0:00:00
+Collecting schedule
+  Downloading schedule-1.2.2-py3-none-any.whl (12 kB)
+Requirement already satisfied: urllib3>=1.26.0 in d:\capstone\trainforge\cli\venv\lib\site-packages (from docker) (2.5.0)
+Collecting pywin32>=304
+  Downloading pywin32-311-cp39-cp39-win_amd64.whl (9.6 MB)
+     ---------------------------------------- 9.6/9.6 MB 4.9 MB/s eta 0:00:00
+Requirement already satisfied: requests>=2.26.0 in d:\capstone\trainforge\cli\venv\lib\site-packages (from docker) (2.32.4)
+Requirement already satisfied: charset_normalizer<4,>=2 in d:\capstone\trainforge\cli\venv\lib\site-packages (from requests>=2.26.0->docker) (3.4.2)
+Requirement already satisfied: idna<4,>=2.5 in d:\capstone\trainforge\cli\venv\lib\site-packages (from requests>=2.26.0->docker) (3.10)
+Requirement already satisfied: certifi>=2017.4.17 in d:\capstone\trainforge\cli\venv\lib\site-packages (from requests>=2.26.0->docker) (2025.7.14)
+Installing collected packages: pywin32, schedule, docker
+Successfully installed docker-7.1.0 pywin32-311 schedule-1.2.2
