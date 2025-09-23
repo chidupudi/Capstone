@@ -83,29 +83,16 @@ case $choice in
             exit 1
         fi
 
-        echo "Installing CLI..."
+        echo "Setting up Python environment and dependencies..."
         cd ../cli
+        source set_env.sh
         pip install -e .
         if [ $? -ne 0 ]; then
             echo "❌ Failed to install CLI"
             exit 1
         fi
 
-        echo "Installing Scheduler dependencies..."
-        cd ../scheduler
-        pip install -r src/requirements.txt
-        if [ $? -ne 0 ]; then
-            echo "❌ Failed to install Scheduler dependencies"
-            exit 1
-        fi
-
-        echo "Installing Worker dependencies..."
-        cd ../worker
-        pip install -r requirements.txt
-        if [ $? -ne 0 ]; then
-            echo "❌ Failed to install Worker dependencies"
-            exit 1
-        fi
+        echo "✅ All Python dependencies installed from CLI requirements!"
 
         cd ../..
         echo "✅ All dependencies installed successfully!"
@@ -180,6 +167,8 @@ EOF
         sleep 3
 
         echo "Starting Scheduler..."
+        cd ../cli
+        source set_env.sh
         cd ../scheduler
         $PYTHON_CMD src/job_scheduler.py &
         SCHEDULER_PID=$!
@@ -187,6 +176,8 @@ EOF
         sleep 2
 
         echo "Starting Worker..."
+        cd ../cli
+        source set_env.sh
         cd ../worker
         $PYTHON_CMD worker.py &
         WORKER_PID=$!

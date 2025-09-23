@@ -75,8 +75,9 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Installing CLI...
+echo Setting up Python environment and dependencies...
 cd ..\cli
+call set_env.bat
 pip install -e .
 if %ERRORLEVEL% NEQ 0 (
     echo ❌ Failed to install CLI
@@ -84,23 +85,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Installing Scheduler dependencies...
-cd ..\scheduler
-pip install -r src\requirements.txt
-if %ERRORLEVEL% NEQ 0 (
-    echo ❌ Failed to install Scheduler dependencies
-    pause
-    exit /b 1
-)
-
-echo Installing Worker dependencies...
-cd ..\worker
-pip install -r requirements.txt
-if %ERRORLEVEL% NEQ 0 (
-    echo ❌ Failed to install Worker dependencies
-    pause
-    exit /b 1
-)
+echo ✅ All Python dependencies installed from CLI requirements!
 
 cd ..\..
 echo ✅ All dependencies installed successfully!
@@ -166,14 +151,13 @@ start "TrainForge Dashboard" cmd /k "npm start"
 timeout /t 3 /nobreak >nul
 
 echo Starting Scheduler...
-cd ..\scheduler
-start "TrainForge Scheduler" cmd /k "python src\job_scheduler.py"
+cd ..\cli
+start "TrainForge Scheduler" cmd /k "call set_env.bat && cd ..\scheduler && python src\job_scheduler.py"
 
 timeout /t 2 /nobreak >nul
 
 echo Starting Worker...
-cd ..\worker
-start "TrainForge Worker" cmd /k "python worker.py"
+start "TrainForge Worker" cmd /k "call %~dp0trainforge\cli\set_env.bat && cd %~dp0trainforge\worker && python worker.py"
 
 echo.
 echo ✅ Full setup started!

@@ -7,12 +7,30 @@ TrainForge is a complete distributed AI training platform that handles GPU alloc
 ## ⚡ Quick Start
 
 ### 🚀 **Option 1: Automated (Recommended)**
+
+**Windows:**
+```cmd
+# 1. Start all services
+start-trainforge.bat
+
+# 2. Setup environment & create project
+cd trainforge\cli
+call set_env.bat
+mkdir my-ai-project && cd my-ai-project
+trainforge init --name "my-model-training"
+
+# 3. Submit job
+trainforge push
+```
+
+**Linux/macOS:**
 ```bash
 # 1. Start all services
-./start-trainforge.bat
+./start-trainforge.sh
 
-# 2. Install CLI & create project
-cd trainforge/cli && pip install -e .
+# 2. Setup environment & create project
+cd trainforge/cli
+source set_env.sh
 mkdir my-ai-project && cd my-ai-project
 trainforge init --name "my-model-training"
 
@@ -21,6 +39,33 @@ trainforge push
 ```
 
 ### 🔧 **Option 2: Manual Component Control**
+
+**Windows:**
+```cmd
+# Terminal 1: Database
+mongod --dbpath ./data/db
+
+# Terminal 2: API Server
+cd trainforge\api && npm start
+
+# Terminal 3: Dashboard
+cd trainforge\dashboard && npm start
+
+# Terminal 4: Setup Python Environment
+cd trainforge\cli
+call set_env.bat
+
+# Terminal 5: Scheduler (in same environment)
+cd ..\scheduler && python src\job_scheduler.py
+
+# Terminal 6: Worker Node (in same environment)
+cd ..\worker && python worker.py
+
+# Terminal 7: Submit Jobs
+cd my-project && trainforge push
+```
+
+**Linux/macOS:**
 ```bash
 # Terminal 1: Database
 mongod --dbpath ./data/db
@@ -31,13 +76,17 @@ cd trainforge/api && npm start
 # Terminal 3: Dashboard
 cd trainforge/dashboard && npm start
 
-# Terminal 4: Scheduler
-cd trainforge/scheduler && python -m src.job_scheduler
+# Terminal 4: Setup Python Environment
+cd trainforge/cli
+source set_env.sh
 
-# Terminal 5: Worker Node
-cd trainforge/workers && python worker_node.py
+# Terminal 5: Scheduler (in same environment)
+cd ../scheduler && python src/job_scheduler.py
 
-# Terminal 6: Submit Jobs
+# Terminal 6: Worker Node (in same environment)
+cd ../worker && python worker.py
+
+# Terminal 7: Submit Jobs
 cd my-project && trainforge push
 ```
 
@@ -193,12 +242,70 @@ Perfect showcase of TrainForge's power:
 
 ## 🔧 Prerequisites
 
-- Python 3.8+
-- Node.js 16+
+- Python 3.8+ (with pip)
+- Node.js 16+ (with npm)
 - MongoDB (auto-configured)
 - Docker (optional, fallback available)
 
+## 🛠️ Environment Setup
+
+TrainForge uses a **unified virtual environment** located in `trainforge/cli/venv/` for all Python components (CLI, Scheduler, Worker, Examples).
+
+### First Time Setup
+
+**Windows:**
+```cmd
+# 1. Install dependencies
+start-trainforge.bat
+# Choose option 3 (Setup dependencies only)
+
+# 2. Activate environment for manual use
+cd trainforge\cli
+call set_env.bat
+```
+
+**Linux/macOS:**
+```bash
+# 1. Install dependencies
+./start-trainforge.sh
+# Choose option 3 (Setup dependencies only)
+
+# 2. Activate environment for manual use
+cd trainforge/cli
+source set_env.sh
+```
+
+### Environment Features
+
+- ✅ **Unified Dependencies**: All Python packages in one place
+- ✅ **ML Libraries**: PyTorch, Transformers, TensorBoard pre-installed
+- ✅ **Environment Variables**: HF_HOME, TRANSFORMERS_CACHE auto-configured
+- ✅ **Cache Management**: Shared model cache directories
+- ✅ **Cross-Platform**: Works on Windows, Linux, and macOS
+
 ## 🚨 Troubleshooting
+
+**Environment not working?**
+```cmd
+# Windows: Reset environment
+cd trainforge\cli
+call set_env.bat
+
+# Linux/macOS: Reset environment
+cd trainforge/cli
+source set_env.sh
+```
+
+**Transformers not loading?**
+```cmd
+# Check if transformers is installed
+python -c "import transformers; print('✅ Working')"
+
+# If not, reinstall
+cd trainforge\cli
+call venv\Scripts\activate.bat  # Windows
+pip install -r requirements.txt
+```
 
 **API not responding?**
 ```bash
@@ -210,13 +317,17 @@ cd trainforge/api && npm start
 cd trainforge/dashboard && npm start
 ```
 
+**Python components failing?**
+- Make sure you're using the unified venv: `cd trainforge/cli && call set_env.bat`
+- Check environment variables: `echo %HF_HOME%` (Windows) or `echo $HF_HOME` (Linux)
+
 **Job stuck pending?**
 - Check GPU availability in dashboard
 - Verify your trainforge.yaml resource requirements
 
 **Training fails?**
 - Check logs: `trainforge status <job_id>`
-- Verify your train.py script runs locally
+- Verify your train.py script runs locally with the unified environment
 
 ## 🤝 Contributing
 
