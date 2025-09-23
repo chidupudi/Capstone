@@ -62,11 +62,11 @@ class GPUResourceManager:
             # Try nvidia-ml-py first (more reliable)
             self._discover_gpus_with_nvml()
         except (ImportError, Exception) as e:
-            print(f"⚠️ NVML not available ({e}), falling back to nvidia-smi")
+            print(f"WARNING: NVML not available ({e}), falling back to nvidia-smi")
             try:
                 self._discover_gpus_with_smi()
             except Exception as e:
-                print(f"⚠️ nvidia-smi not available ({e}), creating mock GPUs for demo")
+                print(f"WARNING: nvidia-smi not available ({e}), creating mock GPUs for demo")
                 self._create_mock_gpus()
 
     def _discover_gpus_with_nvml(self):

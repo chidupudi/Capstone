@@ -14,17 +14,29 @@ import docker
 import subprocess
 import os
 
-from .gpu_manager import gpu_manager, GPUStatus
-from .cpu_manager import cpu_manager
-from .container_manager import ContainerManager
-from .distributed_processor import distributed_processor
 try:
+    from .gpu_manager import gpu_manager, GPUStatus
+    from .cpu_manager import cpu_manager
+    from .container_manager import ContainerManager
+    from .distributed_processor import distributed_processor
     from .distributed_trainer import DistributedTrainer
 except ImportError:
-    # Fallback if distributed_trainer doesn't exist
-    class DistributedTrainer:
-        def start_distributed_training(self, *args, **kwargs):
-            return None
+    # Fallback for direct execution - use absolute imports
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent))
+
+    from gpu_manager import gpu_manager, GPUStatus
+    from cpu_manager import cpu_manager
+    from container_manager import ContainerManager
+    from distributed_processor import distributed_processor
+    try:
+        from distributed_trainer import DistributedTrainer
+    except ImportError:
+        # Fallback if distributed_trainer doesn't exist
+        class DistributedTrainer:
+            def start_distributed_training(self, *args, **kwargs):
+                return None
 
 class JobPriority(Enum):
     LOW = 1

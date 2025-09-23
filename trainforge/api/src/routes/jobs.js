@@ -221,4 +221,140 @@ router.delete('/:jobId', async (req, res) => {
     }
 });
 
+// GET /api/jobs/pending - Get pending jobs for workers
+router.get('/pending', async (req, res) => {
+    try {
+        // Get jobs with status 'pending'
+        const jobs = await JobModel.listJobs(100); // Get more jobs for filtering
+        const pendingJobs = jobs.filter(job => job.status === 'pending');
+
+        res.json(pendingJobs);
+
+    } catch (error) {
+        console.error('❌ Failed to get pending jobs:', error);
+        res.status(500).json({
+            error: 'Failed to get pending jobs',
+            message: error.message
+        });
+    }
+});
+
+// POST /api/jobs/:jobId/claim - Claim a job for processing
+router.post('/:jobId/claim', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const { worker_id } = req.body;
+
+        if (!worker_id) {
+            return res.status(400).json({ error: 'worker_id is required' });
+        }
+
+        // Update job status to running and assign worker
+        const updatedJob = await JobModel.updateJob(jobId, {
+            status: 'running',
+            worker_id: worker_id,
+            started_at: new Date().toISOString()
+        });
+
+        console.log(`🎯 Job ${jobId} claimed by worker ${worker_id}`);
+
+        res.json({
+            success: true,
+            message: 'Job claimed successfully',
+            job_id: jobId,
+            worker_id: worker_id
+        });
+
+    } catch (error) {
+        console.error('❌ Failed to claim job:', error);
+        res.status(500).json({
+            error: 'Failed to claim job',
+            message: error.message
+        });
+    }
+});
+
+// PUT /api/jobs/:jobId/status - Update job status (simplified endpoint)
+router.put('/:jobId/status', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const { status, message } = req.body;
+
+        const updates = { status };
+        if (message) {
+            updates.message = message;
+        }
+
+        if (status === 'completed') {
+            updates.completed_at = new Date().toISOString();
+        } else if (status === 'failed') {
+            updates.failed_at = new Date().toISOString();
+            updates.error_message = message;
+        }
+
+        const updatedJob = await JobModel.updateJob(jobId, updates);
+
+        console.log(`📊 Job ${jobId} status updated to ${status}`);
+
+        res.json({
+            success: true,
+            job_id: jobId,
+            status: status
+        });
+
+    } catch (error) {
+        console.error('❌ Failed to update job status:', error);
+        res.status(500).json({
+            error: 'Failed to update job status',
+            message: error.message
+        });
+    }
+});
+
+// POST /api/jobs/:jobId/logs - Add log entry for job
+router.post('/:jobId/logs', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const { message, timestamp } = req.body;
+
+        // For now, just log to console (could be stored in database)
+        const logTime = timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString();
+        console.log(`📝 [${jobId}] ${logTime}: ${message}`);
+
+        res.json({
+            success: true,
+            message: 'Log entry added'
+        });
+
+    } catch (error) {
+        console.error('❌ Failed to add log:', error);
+        res.status(500).json({
+            error: 'Failed to add log',
+            message: error.message
+        });
+    }
+});
+
+// GET /api/jobs/:jobId/files - Download job files
+router.get('/:jobId/files', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+
+        // For now, return a mock response (real implementation would stream zip file)
+        console.log(`📦 File download requested for job ${jobId}`);
+
+        res.status(501).json({
+            error: 'File download not implemented yet',
+            message: 'This endpoint will provide job files as a zip download'
+        });
+
+    } catch (error) {
+        console.error('❌ Failed to get job files:', error);
+        res.status(500).json({
+            error: 'Failed to get job files',
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;

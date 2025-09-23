@@ -19,7 +19,10 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from .cpu_manager import cpu_manager, CPUAllocation
+try:
+    from .cpu_manager import cpu_manager, CPUAllocation
+except ImportError:
+    from cpu_manager import cpu_manager, CPUAllocation
 
 class ProcessingMode(Enum):
     MULTIPROCESSING = "multiprocessing"
