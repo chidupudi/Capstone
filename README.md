@@ -8,7 +8,7 @@ TrainForge is a complete distributed AI training platform that handles GPU alloc
 
 ### 🚀 **Option 1: Automated (Recommended)**
 
-**Windows:**
+**Windows (Command Prompt):**
 ```cmd
 # 1. Start all services
 start-trainforge.bat
@@ -17,6 +17,21 @@ start-trainforge.bat
 cd trainforge\cli
 call set_env.bat
 mkdir my-ai-project && cd my-ai-project
+trainforge init --name "my-model-training"
+
+# 3. Submit job
+trainforge push
+```
+
+**Windows (PowerShell):**
+```powershell
+# 1. Start all services
+.\start-trainforge.bat
+
+# 2. Setup environment & create project
+cd trainforge\cli
+.\set_env.ps1
+mkdir my-ai-project; cd my-ai-project
 trainforge init --name "my-model-training"
 
 # 3. Submit job
@@ -40,7 +55,7 @@ trainforge push
 
 ### 🔧 **Option 2: Manual Component Control**
 
-**Windows:**
+**Windows (Command Prompt):**
 ```cmd
 # Terminal 1: Database
 mongod --dbpath ./data/db
@@ -63,6 +78,31 @@ cd ..\worker && python worker.py
 
 # Terminal 7: Submit Jobs
 cd my-project && trainforge push
+```
+
+**Windows (PowerShell):**
+```powershell
+# Terminal 1: Database
+mongod --dbpath ./data/db
+
+# Terminal 2: API Server
+cd trainforge\api; npm start
+
+# Terminal 3: Dashboard
+cd trainforge\dashboard; npm start
+
+# Terminal 4: Setup Python Environment
+cd trainforge\cli
+.\set_env.ps1
+
+# Terminal 5: Scheduler (in same environment)
+cd ..\scheduler; python src\job_scheduler.py
+
+# Terminal 6: Worker Node (in same environment)
+cd ..\worker; python worker.py
+
+# Terminal 7: Submit Jobs
+cd my-project; trainforge push
 ```
 
 **Linux/macOS:**
@@ -253,7 +293,7 @@ TrainForge uses a **unified virtual environment** located in `trainforge/cli/ven
 
 ### First Time Setup
 
-**Windows:**
+**Windows (Command Prompt):**
 ```cmd
 # 1. Install dependencies
 start-trainforge.bat
@@ -262,6 +302,17 @@ start-trainforge.bat
 # 2. Activate environment for manual use
 cd trainforge\cli
 call set_env.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+# 1. Install dependencies
+.\start-trainforge.bat
+# Choose option 3 (Setup dependencies only)
+
+# 2. Activate environment for manual use
+cd trainforge\cli
+.\set_env.ps1
 ```
 
 **Linux/macOS:**
@@ -287,10 +338,18 @@ source set_env.sh
 
 **Environment not working?**
 ```cmd
-# Windows: Reset environment
+# Windows Command Prompt: Reset environment
 cd trainforge\cli
 call set_env.bat
+```
 
+```powershell
+# Windows PowerShell: Reset environment
+cd trainforge\cli
+.\set_env.ps1
+```
+
+```bash
 # Linux/macOS: Reset environment
 cd trainforge/cli
 source set_env.sh
@@ -318,8 +377,12 @@ cd trainforge/dashboard && npm start
 ```
 
 **Python components failing?**
-- Make sure you're using the unified venv: `cd trainforge/cli && call set_env.bat`
-- Check environment variables: `echo %HF_HOME%` (Windows) or `echo $HF_HOME` (Linux)
+- **Command Prompt**: `cd trainforge\cli && call set_env.bat`
+- **PowerShell**: `cd trainforge\cli; .\set_env.ps1`
+- **Linux/macOS**: `cd trainforge/cli && source set_env.sh`
+- Check environment variables:
+  - Windows: `echo %HF_HOME%` (cmd) or `$env:HF_HOME` (PowerShell)
+  - Linux/macOS: `echo $HF_HOME`
 
 **Job stuck pending?**
 - Check GPU availability in dashboard
