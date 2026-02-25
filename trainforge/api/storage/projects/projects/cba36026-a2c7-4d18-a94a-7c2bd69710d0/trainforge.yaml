@@ -1,0 +1,13 @@
+environment:
+  base_image: pytorch/pytorch:latest
+  python_version: '3.9'
+project:
+  description: AI training project created with TrainForge
+  name: capstone2-pp2
+resources:
+  cpu: 2
+  gpu: 1
+  memory: 4Gi
+training:
+  requirements: requirements.txt
+  script: train.py

@@ -1,317 +1,277 @@
 """
-TrainForge External GPU Worker for Google Colab
-This script connects a Colab GPU to your local TrainForge instance
+TrainForge External GPU Worker — Google Colab (Resilient Edition)
+
+PASTE THIS INTO COLAB (one cell):
+
+    import os, urllib.request
+    API_URL = 'https://trainforge.datenwork.in'
+    os.environ['TRAINFORGE_API_URL'] = API_URL
+    req = urllib.request.Request(
+        f'{API_URL}/api/config/worker-script?platform=colab',
+        headers={'ngrok-skip-browser-warning': 'true', 'User-Agent': 'TrainForge/1.0'}
+    )
+    with urllib.request.urlopen(req) as r:
+        exec(compile(r.read().decode(), 'colab_worker.py', 'exec'))
 """
 
-import os
-import sys
-import time
-import requests
-import json
-import subprocess
-import tempfile
-import zipfile
+import os, sys, time, json, signal, shutil, subprocess, zipfile, threading
 from pathlib import Path
-import threading
-import signal
 
-class ColabGPUWorker:
-    def __init__(self, api_url, worker_id=None):
-        self.api_url = api_url.rstrip('/')
-        self.worker_id = worker_id or f"colab-{int(time.time())}"
-        self.running = False
-        self.current_job = None
+try:
+    import requests
+except ImportError:
+    subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests', '-q'], check=True)
+    import requests
 
-        # Setup work directory
-        self.work_dir = Path("/content/trainforge_work")
-        self.work_dir.mkdir(exist_ok=True)
+# ─── Config ───────────────────────────────────────────────────────────────────
+API_URL   = os.environ.get('TRAINFORGE_API_URL', '').strip().rstrip('/')
+WORKER_ID = f"colab-{int(time.time())}"
+WORK_DIR  = Path('/content/trainforge_work')
+WORK_DIR.mkdir(exist_ok=True)
 
-        print(f"🚀 TrainForge Colab Worker: {self.worker_id}")
-        print(f"📡 API URL: {self.api_url}")
-        print(f"📁 Work directory: {self.work_dir}")
+HEADERS = {
+    'ngrok-skip-browser-warning': 'true',
+    'User-Agent': 'TrainForge-Worker/2.0',
+    'Content-Type': 'application/json',
+}
 
-    def check_gpu(self):
-        """Check if GPU is available"""
+# ─── Keep Colab alive (prevents idle disconnect) ─────────────────────────────
+def _keep_alive():
+    """Outputs a heartbeat every 4 minutes so Colab doesn't idle-disconnect."""
+    while True:
+        time.sleep(240)
+        print(f"\r⏳ [keep-alive] {time.strftime('%H:%M:%S')} — worker running…", flush=True)
+
+threading.Thread(target=_keep_alive, daemon=True).start()
+
+# ─── HTTP helpers ─────────────────────────────────────────────────────────────
+def _req(method, path, max_retries=3, **kwargs):
+    url = f"{API_URL}{path}"
+    kwargs.setdefault('timeout', 20)
+    # Merge default headers
+    h = {**HEADERS, **kwargs.pop('headers', {})}
+    if 'files' in kwargs:
+        h = {k: v for k, v in h.items() if k != 'Content-Type'}
+    for attempt in range(max_retries):
         try:
-            import torch
-            if torch.cuda.is_available():
-                gpu_name = torch.cuda.get_device_name(0)
-                gpu_memory = torch.cuda.get_device_properties(0).total_memory // 1024**3
-                print(f"✅ GPU Available: {gpu_name} ({gpu_memory}GB)")
-                return True
-            else:
-                print("❌ No GPU available")
-                return False
-        except ImportError:
-            print("❌ PyTorch not available")
-            return False
+            return requests.request(method, url, headers=h, **kwargs)
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                print(f"   ⏳ Retry {attempt+1}/{max_retries} in {wait}s ({e})")
+                time.sleep(wait)
+    return None
 
-    def register_worker(self):
-        """Register this worker with TrainForge API"""
-        try:
-            # Get system info
-            import torch
-            gpu_info = {
-                "name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU",
-                "memory_gb": torch.cuda.get_device_properties(0).total_memory // 1024**3 if torch.cuda.is_available() else 0,
-                "compute_capability": torch.cuda.get_device_capability(0) if torch.cuda.is_available() else None
+# ─── Worker actions ───────────────────────────────────────────────────────────
+def test_connection():
+    r = _req('GET', '/health', max_retries=2)
+    return r is not None and r.status_code == 200
+
+def get_gpu_info():
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return {
+                'available': True,
+                'name': torch.cuda.get_device_name(0),
+                'memory_gb': round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1),
+                'cuda': torch.version.cuda,
             }
+    except Exception:
+        pass
+    return {'available': False, 'name': 'CPU only', 'memory_gb': 0}
 
-            worker_data = {
-                "worker_id": self.worker_id,
-                "status": "available",
-                "worker_type": "external_colab",
-                "capabilities": {
-                    "gpu_count": 1 if torch.cuda.is_available() else 0,
-                    "gpu_info": gpu_info,
-                    "max_memory_gb": gpu_info["memory_gb"]
-                },
-                "location": "google_colab"
-            }
+def register():
+    gpu = get_gpu_info()
+    data = {
+        'worker_id':   WORKER_ID,
+        'status':      'idle',
+        'worker_type': 'external_colab',
+        'location':    'google_colab',
+        'gpu_name':    gpu['name'],
+        'gpu_memory_gb': gpu['memory_gb'],
+        'capabilities': {
+            'gpu_count':  1 if gpu['available'] else 0,
+            'gpu_info':   gpu,
+            'max_memory_gb': gpu['memory_gb'],
+        },
+    }
+    r = _req('POST', '/api/workers/register', json=data)
+    return r is not None and r.status_code in (200, 201)
 
-            response = requests.post(f"{self.api_url}/api/workers/register", json=worker_data)
-            if response.status_code == 200:
-                print(f"✅ Worker registered successfully")
-                return True
-            else:
-                print(f"❌ Failed to register worker: {response.text}")
-                return False
+def heartbeat(current_job=None):
+    payload = {'timestamp': time.time()}
+    if current_job:
+        payload['current_job_id'] = current_job
+    r = _req('POST', f'/api/workers/{WORKER_ID}/heartbeat', json=payload, max_retries=1)
+    return r is not None and r.status_code == 200
 
-        except Exception as e:
-            print(f"❌ Registration error: {e}")
-            return False
+def poll_jobs():
+    r = _req('GET', '/api/jobs/pending', max_retries=1)
+    if r and r.status_code == 200:
+        jobs = r.json()
+        if isinstance(jobs, list):
+            return jobs
+    return []
 
-    def poll_for_jobs(self):
-        """Poll TrainForge API for available jobs"""
-        try:
-            response = requests.get(f"{self.api_url}/api/jobs/pending")
-            if response.status_code == 200:
-                jobs = response.json()
-                return [job for job in jobs if self.can_handle_job(job)]
-            return []
-        except Exception as e:
-            print(f"⚠️ Failed to fetch jobs: {e}")
-            return []
+def claim_job(job_id):
+    r = _req('POST', f'/api/jobs/{job_id}/claim', json={'worker_id': WORKER_ID})
+    return r is not None and r.status_code == 200
 
-    def can_handle_job(self, job):
-        """Check if this worker can handle the job"""
-        try:
-            resources = job.get('resources', {})
-            gpu_required = resources.get('gpu', 0)
-            memory_required = resources.get('memory_gb', 0)
+def update_status(job_id, status, message=None):
+    data = {'status': status}
+    if message:
+        data['message'] = message
+    _req('PUT', f'/api/jobs/{job_id}/status', json=data, max_retries=2)
 
-            # Check if we have GPU and enough memory
-            import torch
-            if gpu_required > 0 and not torch.cuda.is_available():
-                return False
+def send_log(job_id, msg):
+    _req('POST', f'/api/jobs/{job_id}/logs',
+         json={'message': msg, 'timestamp': time.time()}, max_retries=1)
 
-            if torch.cuda.is_available():
-                available_memory = torch.cuda.get_device_properties(0).total_memory // 1024**3
-                if memory_required > available_memory:
-                    return False
+def download_files(job_id):
+    r = _req('GET', f'/api/jobs/{job_id}/files', stream=True, timeout=120)
+    if not r or r.status_code != 200:
+        return WORK_DIR / job_id   # empty dir — demo/mock mode
+    job_dir = WORK_DIR / job_id
+    job_dir.mkdir(exist_ok=True)
+    zip_path = WORK_DIR / f'{job_id}.zip'
+    with open(zip_path, 'wb') as f:
+        for chunk in r.iter_content(8192):
+            f.write(chunk)
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(job_dir)
+    zip_path.unlink()
+    return job_dir
 
-            return gpu_required <= 1  # Colab typically has 1 GPU
+def run_training(job_id, job_dir):
+    for name in ['train.py', 'main.py', 'run.py']:
+        script = job_dir / name
+        if script.exists():
+            break
+    else:
+        py = list(job_dir.glob('*.py'))
+        if not py:
+            raise FileNotFoundError('No training script found in job directory')
+        script = py[0]
 
-        except Exception as e:
-            print(f"❌ Error checking job capacity: {e}")
-            return False
+    print(f"📜 Running: {script.name}")
+    proc = subprocess.Popen(
+        [sys.executable, str(script)], cwd=str(job_dir),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+    )
+    for line in proc.stdout:
+        line = line.rstrip()
+        if line:
+            print(f"  {line}", flush=True)
+            send_log(job_id, line)
+    return proc.wait() == 0
 
-    def download_job_files(self, job_id):
-        """Download job files from TrainForge API"""
-        try:
-            response = requests.get(f"{self.api_url}/api/jobs/{job_id}/files")
-            if response.status_code == 200:
-                # Save zip file
-                zip_path = self.work_dir / f"{job_id}.zip"
-                with open(zip_path, 'wb') as f:
-                    f.write(response.content)
+def execute_job(job):
+    job_id = job.get('job_id') or job.get('_id')
+    job_dir = None
+    try:
+        print(f"\n{'='*55}")
+        print(f"🎯 Job: {job_id}")
+        print(f"{'='*55}")
+        update_status(job_id, 'running', 'Initializing…')
 
-                # Extract files
-                job_dir = self.work_dir / job_id
-                job_dir.mkdir(exist_ok=True)
+        job_dir = download_files(job_id)
+        req_file = job_dir / 'requirements.txt'
+        if req_file.exists():
+            update_status(job_id, 'running', 'Installing deps…')
+            subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-r', str(req_file)],
+                           check=True, capture_output=True)
 
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(job_dir)
+        update_status(job_id, 'running', 'Training…')
+        success = run_training(job_id, job_dir)
 
-                zip_path.unlink()  # Remove zip file
-                print(f"✅ Downloaded job files to {job_dir}")
-                return job_dir
-            else:
-                print(f"❌ Failed to download job files: {response.text}")
-                return None
+        if success:
+            update_status(job_id, 'completed', 'Training completed ✅')
+            print(f"✅ Job {job_id} completed")
+        else:
+            update_status(job_id, 'failed', 'Training script exited with non-zero code')
+    except Exception as e:
+        print(f"❌ Job error: {e}")
+        update_status(job_id, 'failed', str(e))
+    finally:
+        if job_dir and job_dir.exists():
+            shutil.rmtree(job_dir, ignore_errors=True)
 
-        except Exception as e:
-            print(f"❌ Error downloading job files: {e}")
-            return None
-
-    def run_training_job(self, job):
-        """Execute the training job"""
-        job_id = job['job_id']
-        print(f"🚀 Starting job {job_id}")
-
-        try:
-            # Update job status
-            self.update_job_status(job_id, "running")
-
-            # Download job files
-            job_dir = self.download_job_files(job_id)
-            if not job_dir:
-                self.update_job_status(job_id, "failed", "Failed to download job files")
-                return
-
-            # Install requirements if they exist
-            requirements_file = job_dir / "requirements.txt"
-            if requirements_file.exists():
-                print("📦 Installing requirements...")
-                subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)],
-                             cwd=job_dir, check=True)
-
-            # Run training script
-            training_script = job_dir / job.get('script', 'train.py')
-            if not training_script.exists():
-                self.update_job_status(job_id, "failed", f"Training script not found: {training_script}")
-                return
-
-            print(f"🏃 Executing: python {training_script}")
-
-            # Set environment variables
-            env = os.environ.copy()
-            env['TRAINFORGE_JOB_ID'] = job_id
-            env['CUDA_VISIBLE_DEVICES'] = '0'  # Use first GPU
-
-            # Run the training script
-            process = subprocess.Popen(
-                [sys.executable, str(training_script)],
-                cwd=job_dir,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-
-            # Stream output in real-time
-            for line in process.stdout:
-                print(line.rstrip())
-                self.send_job_log(job_id, line.rstrip())
-
-            # Wait for completion
-            exit_code = process.wait()
-
-            if exit_code == 0:
-                print(f"✅ Job {job_id} completed successfully")
-                self.update_job_status(job_id, "completed")
-            else:
-                print(f"❌ Job {job_id} failed with exit code {exit_code}")
-                self.update_job_status(job_id, "failed", f"Exit code: {exit_code}")
-
-        except Exception as e:
-            print(f"❌ Error running job {job_id}: {e}")
-            self.update_job_status(job_id, "failed", str(e))
-
-    def update_job_status(self, job_id, status, message=None):
-        """Update job status in TrainForge API"""
-        try:
-            data = {"status": status}
-            if message:
-                data["message"] = message
-
-            response = requests.put(f"{self.api_url}/api/jobs/{job_id}/status", json=data)
-            if response.status_code != 200:
-                print(f"⚠️ Failed to update job status: {response.text}")
-        except Exception as e:
-            print(f"⚠️ Failed to update job status: {e}")
-
-    def send_job_log(self, job_id, message):
-        """Send log message to TrainForge API"""
-        try:
-            data = {
-                "job_id": job_id,
-                "message": message,
-                "timestamp": time.time()
-            }
-            requests.post(f"{self.api_url}/api/jobs/{job_id}/logs", json=data)
-        except:
-            pass  # Ignore log upload failures
-
-    def start(self):
-        """Start the worker loop"""
-        if not self.check_gpu():
-            print("❌ GPU check failed")
-            return
-
-        if not self.register_worker():
-            print("❌ Worker registration failed")
-            return
-
-        self.running = True
-        print("👀 Polling for jobs...")
-
-        try:
-            while self.running:
-                jobs = self.poll_for_jobs()
-
-                for job in jobs:
-                    if not self.running:
-                        break
-
-                    job_id = job['job_id']
-                    print(f"🎯 Found job: {job_id}")
-
-                    # Claim the job
-                    response = requests.post(f"{self.api_url}/api/jobs/{job_id}/claim",
-                                           json={"worker_id": self.worker_id})
-
-                    if response.status_code == 200:
-                        self.current_job = job_id
-                        self.run_training_job(job)
-                        self.current_job = None
-
-                    break  # Process one job at a time
-
-                if self.running:
-                    time.sleep(5)  # Wait 5 seconds before polling again
-
-        except KeyboardInterrupt:
-            print("\n⚠️ Worker stopped by user")
-        finally:
-            self.stop()
-
-    def stop(self):
-        """Stop the worker"""
-        self.running = False
-
-        # Cancel current job if any
-        if self.current_job:
-            try:
-                self.update_job_status(self.current_job, "cancelled", "Worker stopped")
-            except:
-                pass
-
-        print("✅ Worker stopped")
-
+# ─── Main loop (infinite reconnect) ──────────────────────────────────────────
 def main():
-    # Configuration
-    API_URL = input("Enter your TrainForge API URL (e.g., https://your-ngrok-url.com): ").strip()
-
     if not API_URL:
-        print("❌ API URL is required")
+        print("❌ TRAINFORGE_API_URL is not set.")
+        print("   Run: import os; os.environ['TRAINFORGE_API_URL'] = 'https://trainforge.datenwork.in'")
         return
 
-    # Create and start worker
-    worker = ColabGPUWorker(API_URL)
+    gpu = get_gpu_info()
+    print("=" * 55)
+    print("🚀 TrainForge Colab Worker  (Resilient Edition)")
+    print(f"   Worker ID : {WORKER_ID}")
+    print(f"   API       : {API_URL}")
+    print(f"   GPU       : {gpu['name']} · {gpu['memory_gb']} GB")
+    print("=" * 55)
 
-    # Handle shutdown gracefully
-    def signal_handler(signum, frame):
-        print(f"\n⚠️ Received signal {signum}, shutting down...")
-        worker.stop()
+    RECONNECT_DELAY  = 5    # seconds between reconnect attempts
+    MAX_DELAY        = 120  # cap at 2 minutes
+    HEARTBEAT_EVERY  = 25   # seconds
+    current_job      = None
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    while True:   # ← outer loop: reconnect forever on any failure
+        # ── 1. Wait for the API to come back ───────────────────────────────
+        delay = RECONNECT_DELAY
+        while not test_connection():
+            print(f"🔌 API unreachable — retrying in {delay}s…")
+            time.sleep(delay)
+            delay = min(delay * 2, MAX_DELAY)
 
-    # Start worker
-    worker.start()
+        print(f"✅ Connected to API")
 
-if __name__ == "__main__":
+        # ── 2. Register ─────────────────────────────────────────────────────
+        if not register():
+            print("⚠️  Registration failed — will retry after a pause")
+            time.sleep(10)
+            continue
+
+        print(f"📋 Registered as {WORKER_ID}")
+        print("👀 Polling for jobs… (Ctrl-C to stop)\n")
+
+        # ── 3. Poll / work loop ─────────────────────────────────────────────
+        last_hb = time.time()
+        try:
+            while True:
+                now = time.time()
+
+                # Heartbeat
+                if now - last_hb >= HEARTBEAT_EVERY:
+                    ok = heartbeat(current_job)
+                    if not ok:
+                        print("⚠️  Heartbeat failed — reconnecting…")
+                        break   # break inner → outer loop reconnects
+                    last_hb = now
+
+                if current_job is None:
+                    jobs = poll_jobs()
+                    if jobs:
+                        job = jobs[0]
+                        jid = job.get('job_id') or job.get('_id')
+                        if claim_job(jid):
+                            current_job = jid
+                            execute_job(job)
+                            current_job = None
+                    else:
+                        time.sleep(5)
+                else:
+                    time.sleep(2)
+
+        except KeyboardInterrupt:
+            print("\n⛔ Stopped by user — bye!")
+            return
+        except Exception as e:
+            print(f"⚠️  Loop error: {e}  — reconnecting in {RECONNECT_DELAY}s…")
+            time.sleep(RECONNECT_DELAY)
+            # outer while True will reconnect
+
+# ─── Entry ────────────────────────────────────────────────────────────────────
+if __name__ == '__main__':
     main()

@@ -1,0 +1,285 @@
+/* Login Page Styles */
+
+.loginContainer {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 50%, #fef3c7 100%);
+  position: relative;
+  overflow: hidden;
+  padding: var(--spacing-6);
+}
+
+/* Animated Background Elements */
+.bgShape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: float 20s ease-in-out infinite;
+}
+
+.bgShape1 {
+  top: -10%;
+  left: -5%;
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+}
+
+.bgShape2 {
+  bottom: -10%;
+  right: -5%;
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+  animation-delay: 2s;
+}
+
+.bgShape3 {
+  top: 30%;
+  right: 10%;
+  width: 300px;
+  height: 300px;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.loginCard {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: var(--border-radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1),
+              0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  padding: var(--spacing-12);
+  animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header Section */
+.header {
+  text-align: center;
+  margin-bottom: var(--spacing-10);
+}
+
+.logoContainer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--border-radius-lg);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 10px 30px rgba(var(--color-primary-rgb), 0.3);
+  margin-bottom: var(--spacing-6);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 10px 30px rgba(var(--color-primary-rgb), 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 15px 40px rgba(var(--color-primary-rgb), 0.4);
+  }
+}
+
+.logoContainer svg {
+  width: 40px;
+  height: 40px;
+  color: var(--color-white);
+}
+
+.title {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-extrabold);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--spacing-2);
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Error Message */
+.errorMessage {
+  margin-bottom: var(--spacing-6);
+  padding: var(--spacing-4);
+  border-radius: var(--border-radius-md);
+  background: rgba(var(--color-error), 0.1);
+  border: 1px solid rgba(var(--color-error), 0.2);
+  color: var(--color-error-dark);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+/* Login Button */
+.loginButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  background: var(--color-white);
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.loginButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-primary);
+}
+
+.loginButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.loginButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.loginButton img {
+  width: 24px;
+  height: 24px;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Footer */
+.footer {
+  margin-top: var(--spacing-10);
+  padding-top: var(--spacing-6);
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.footerText {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.footerText span {
+  display: block;
+  margin-bottom: var(--spacing-1);
+}
+
+.footerText span:last-child {
+  margin-bottom: 0;
+}
+
+/* Feature Pills */
+.featurePills {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-6);
+  flex-wrap: wrap;
+}
+
+.featurePill {
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  background: var(--color-gray-100);
+  border-radius: var(--border-radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.featurePill svg {
+  width: 14px;
+  height: 14px;
+  color: var(--color-success);
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .loginCard {
+    padding: var(--spacing-8);
+  }
+
+  .title {
+    font-size: var(--font-size-3xl);
+  }
+
+  .logoContainer {
+    width: 64px;
+    height: 64px;
+  }
+
+  .logoContainer svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .bgShape {
+    filter: blur(60px);
+  }
+}

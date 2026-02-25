@@ -11,14 +11,47 @@ from pathlib import Path
 
 class TrainForgeAPIClient:
     """Client for communicating with TrainForge API"""
-    
+
     def __init__(self, base_url: str = "http://localhost:3000"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        
-        # TODO: Add authentication headers when implemented
-        # self.session.headers.update({'Authorization': f'Bearer {token}'})
-    
+
+        # Load authentication token if available
+        self._load_auth_token()
+
+    def _load_auth_token(self):
+        """Load auth token from file if it exists"""
+        try:
+            auth_file = Path.home() / '.trainforge' / 'auth.json'
+            if auth_file.exists():
+                with open(auth_file, 'r') as f:
+                    auth_data = json.load(f)
+                    token = auth_data.get('token')
+                    if token:
+                        self.session.headers.update({'Authorization': f'Bearer {token}'})
+        except Exception:
+            # Silently fail if auth file doesn't exist or can't be read
+            pass
+
+    def authenticate(self, email: str, password: str) -> Dict[str, Any]:
+        """Authenticate with the API server"""
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/auth/login",
+                json={'email': email, 'password': password},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {
+                    'success': False,
+                    'message': response.json().get('message', 'Authentication failed')
+                }
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to authenticate: {e}")
+
     def health_check(self) -> bool:
         """Check if API server is running"""
         try:
@@ -102,7 +135,7 @@ class TrainForgeAPIClient:
             raise Exception(f"Failed to connect to API server: {e}")
     
     def _create_project_zip(self, project_path: str) -> str:
-        """Create a zip file of the project directory"""
+        """Create a zip file of the project directory or a single script"""
         project_dir = Path(project_path)
         
         # Create temporary zip file
@@ -110,24 +143,59 @@ class TrainForgeAPIClient:
         temp_zip.close()
         
         with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_path in project_dir.rglob('*'):
-                if file_path.is_file():
-                    # Skip common ignore patterns
-                    if self._should_ignore_file(file_path):
-                        continue
-                    
-                    # Add file with relative path
-                    arcname = file_path.relative_to(project_dir)
-                    zipf.write(file_path, arcname)
+            if project_dir.is_file():
+                # Just add the single file
+                zipf.write(project_dir, project_dir.name)
+            else:
+                for file_path in project_dir.rglob('*'):
+                    if file_path.is_file():
+                        # Skip common ignore patterns
+                        if self._should_ignore_file(file_path):
+                            continue
+                        
+                        # Add file with relative path
+                        arcname = file_path.relative_to(project_dir)
+                        zipf.write(file_path, arcname)
         
         return temp_zip.name
     
     def _should_ignore_file(self, file_path: Path) -> bool:
         """Check if file should be ignored during zip creation"""
         ignore_patterns = [
-            '.git', '__pycache__', '.pyc', '.DS_Store', 
+            '.git', '__pycache__', '.pyc', '.DS_Store',
             'node_modules', '.env', 'venv', '.venv'
         ]
-        
+
         path_str = str(file_path)
         return any(pattern in path_str for pattern in ignore_patterns)
+
+    def download_results(self, job_id: str, output_path: str) -> bool:
+        """Download training results for a completed job"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/jobs/{job_id}/results",
+                stream=True,
+                timeout=120
+            )
+
+            if response.status_code == 404:
+                # Results not available
+                return False
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to download results: HTTP {response.status_code}")
+
+            # Download file in chunks
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+
+            return True
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to download results: {e}")
+
+
+# Alias for backward compatibility
+APIClient = TrainForgeAPIClient

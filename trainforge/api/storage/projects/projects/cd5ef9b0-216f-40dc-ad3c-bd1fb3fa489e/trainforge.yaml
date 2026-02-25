@@ -1,0 +1,19 @@
+project:
+  name: "final-presentation-demo"
+  description: "Image Classification with ResNet18 on CIFAR-10 - Final Presentation"
+  version: "1.0.0"
+
+training:
+  script: "train.py"
+  framework: "pytorch"
+
+resources:
+  gpu: 1
+  memory_gb: 15
+  cpu_cores: 2
+
+metadata:
+  author: "TrainForge User"
+  date: "2025-11-06"
+  demo: true
+  presentation: true

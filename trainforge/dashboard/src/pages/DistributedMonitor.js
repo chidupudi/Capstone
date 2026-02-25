@@ -2,9 +2,12 @@
 // Real-time monitoring dashboard for distributed K8s training
 
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import './DistributedMonitor.css';
 
 const DistributedMonitor = () => {
+  const { isAdmin } = useAuth();
+
   const [clusterData, setClusterData] = useState({
     pods: [],
     jobs: [],
@@ -18,7 +21,7 @@ const DistributedMonitor = () => {
       completedJobs: 0
     }
   });
-  
+
   const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [lastUpdate, setLastUpdate] = useState(null);
 
@@ -28,7 +31,7 @@ const DistributedMonitor = () => {
       try {
         // In real implementation, this would call K8s API through proxy
         // kubectl proxy --port=8001 enables API access
-        
+
         // Simulate pod data
         const mockPods = [
           {
@@ -169,6 +172,18 @@ const DistributedMonitor = () => {
   const formatMemory = (memory) => `${Math.round(memory)}Mi`;
   const formatPercent = (used, total) => `${((used / total) * 100).toFixed(1)}%`;
 
+  if (!isAdmin) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
+        <div style={{ background: '#1e293b', padding: 40, borderRadius: 16, textAlign: 'center', maxWidth: 400, boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+          <h2 style={{ margin: '0 0 8px', color: '#f1f5f9', fontSize: 24 }}>Access Denied</h2>
+          <p style={{ color: '#94a3b8', fontSize: 14, margin: '0' }}>You do not have permission to access the admin portal.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="distributed-monitor">
       <div className="monitor-header">
@@ -191,7 +206,7 @@ const DistributedMonitor = () => {
             {formatPercent(clusterData.metrics.usedCPU, clusterData.metrics.totalCPU)}
           </div>
           <div className="progress-bar">
-            <div 
+            <div
               className="progress-fill cpu"
               style={{ width: `${(clusterData.metrics.usedCPU / clusterData.metrics.totalCPU) * 100}%` }}
             ></div>
@@ -207,7 +222,7 @@ const DistributedMonitor = () => {
             {formatPercent(clusterData.metrics.usedMemory, clusterData.metrics.totalMemory)}
           </div>
           <div className="progress-bar">
-            <div 
+            <div
               className="progress-fill memory"
               style={{ width: `${(clusterData.metrics.usedMemory / clusterData.metrics.totalMemory) * 100}%` }}
             ></div>
@@ -241,7 +256,7 @@ const DistributedMonitor = () => {
             <div key={index} className={`job-card ${job.type}`}>
               <div className="job-header">
                 <h3>{job.type === 'traditional' ? '🐌 Traditional Training' : '⚡ Distributed Training'}</h3>
-                <span 
+                <span
                   className="job-status"
                   style={{ color: getStatusColor(job.status) }}
                 >
@@ -268,10 +283,10 @@ const DistributedMonitor = () => {
               </div>
               <div className="job-progress">
                 <div className="progress-bar">
-                  <div 
+                  <div
                     className={`progress-fill ${job.type}`}
-                    style={{ 
-                      width: `${(parseFloat(job.completions.split('/')[0]) / parseFloat(job.completions.split('/')[1])) * 100}%` 
+                    style={{
+                      width: `${(parseFloat(job.completions.split('/')[0]) / parseFloat(job.completions.split('/')[1])) * 100}%`
                     }}
                   ></div>
                 </div>
@@ -298,7 +313,7 @@ const DistributedMonitor = () => {
             <div key={index} className={`table-row ${pod.type}`}>
               <div className="pod-name">{pod.name}</div>
               <div className="pod-status">
-                <span 
+                <span
                   className="status-dot"
                   style={{ backgroundColor: getStatusColor(pod.status) }}
                 ></span>

@@ -4,8 +4,10 @@ trainforge/api_client.py
 trainforge/config.py
 trainforge/main.py
 trainforge/commands/__init__.py
+trainforge/commands/auth.py
 trainforge/commands/init.py
 trainforge/commands/push.py
+trainforge/commands/results.py
 trainforge/commands/status.py
 trainforge_cli.egg-info/PKG-INFO
 trainforge_cli.egg-info/SOURCES.txt

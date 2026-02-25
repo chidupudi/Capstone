@@ -1,80 +1,74 @@
 // File: trainforge/api/src/db/models.js
-// MongoDB models using Mongoose
+// Firestore-backed JobModel — drop-in replacement for the Mongoose version
 
-const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+const { getDB } = require('./firebase');
 
-// Training Job Schema
-const TrainingJobSchema = new mongoose.Schema({
-    job_id: {
-        type: String,
-        unique: true,
-        default: () => uuidv4()
-    },
-    project_name: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    training_script: {
-        type: String,
-        required: true,
-        default: 'train.py'
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'running', 'completed', 'failed', 'cancelled'],
-        default: 'pending'
-    },
-    progress: {
-        type: Number,
-        min: 0,
-        max: 100,
-        default: 0
-    },
-    resources: {
-        gpu: { type: Number, default: 1 },
-        cpu: { type: Number, default: 2 },
-        memory: { type: String, default: '4Gi' }
-    },
-    config: {
-        type: mongoose.Schema.Types.Mixed,
-        required: true
-    },
-    logs: [{
-        timestamp: { type: Date, default: Date.now },
-        message: String
-    }],
-    error_message: String,
-    gpu_id: String,
-    worker_node: String,
-    duration: Number, // in seconds
-    started_at: Date,
-    completed_at: Date
-}, {
-    timestamps: true // Automatically adds createdAt and updatedAt
-});
-
-// Index for efficient queries
-TrainingJobSchema.index({ status: 1, createdAt: 1 });
-TrainingJobSchema.index({ job_id: 1 }, { unique: true });
-
-const TrainingJob = mongoose.model('TrainingJob', TrainingJobSchema);
+const JOBS_COLLECTION = 'jobs';
 
 class JobModel {
+
+    // ─── helpers ──────────────────────────────────────────────────────────────
+    _col() {
+        return getDB().collection(JOBS_COLLECTION);
+    }
+
+    /** Convert a Firestore doc snapshot to a plain job object */
+    _format(docSnap) {
+        if (!docSnap.exists) throw new Error('Job not found');
+        const d = docSnap.data();
+        return {
+            job_id: d.job_id,
+            user_id: d.user_id ?? null,
+            project_name: d.project_name,
+            training_script: d.training_script,
+            status: d.status,
+            progress: d.progress ?? 0,
+            resources: d.resources,
+            config: d.config,
+            logs: d.logs ?? [],
+            error_message: d.error_message ?? null,
+            gpu_id: d.gpu_id ?? null,
+            worker_node: d.worker_node ?? null,
+            duration: d.duration ?? null,
+            created_at: d.created_at?.toDate?.()?.toISOString() ?? d.created_at ?? null,
+            updated_at: d.updated_at?.toDate?.()?.toISOString() ?? d.updated_at ?? null,
+            started_at: d.started_at?.toDate?.()?.toISOString() ?? d.started_at ?? null,
+            completed_at: d.completed_at?.toDate?.()?.toISOString() ?? d.completed_at ?? null,
+        };
+    }
+
+    // ─── CRUD ─────────────────────────────────────────────────────────────────
+
     async createJob(jobData) {
         try {
-            const job = new TrainingJob({
+            const job_id = uuidv4();
+            const now = new Date();
+
+            const doc = {
+                job_id,
+                user_id: jobData.user_id || null,
                 project_name: jobData.project?.name || 'untitled-project',
                 training_script: jobData.training?.script || 'train.py',
+                status: 'pending',
+                progress: 0,
                 resources: jobData.resources || { gpu: 1, cpu: 2, memory: '4Gi' },
-                config: jobData
-            });
+                config: jobData,
+                logs: [],
+                error_message: null,
+                gpu_id: null,
+                worker_node: null,
+                duration: null,
+                created_at: now,
+                updated_at: now,
+                started_at: null,
+                completed_at: null,
+            };
 
-            const savedJob = await job.save();
-            console.log(`✅ Job created: ${savedJob.job_id}`);
-            
-            return this.formatJob(savedJob);
+            await this._col().doc(job_id).set(doc);
+            console.log(`✅ Job created in Firestore: ${job_id}`);
+
+            return this._format({ exists: true, data: () => doc });
 
         } catch (error) {
             console.error('❌ Error creating job:', error);
@@ -84,14 +78,9 @@ class JobModel {
 
     async getJob(jobId) {
         try {
-            const job = await TrainingJob.findOne({ job_id: jobId });
-            
-            if (!job) {
-                throw new Error('Job not found');
-            }
-
-            return this.formatJob(job);
-
+            const snap = await this._col().doc(jobId).get();
+            if (!snap.exists) throw new Error('Job not found');
+            return this._format(snap);
         } catch (error) {
             console.error('❌ Error getting job:', error);
             throw new Error(`Failed to get job: ${error.message}`);
@@ -100,18 +89,16 @@ class JobModel {
 
     async updateJob(jobId, updates) {
         try {
-            const job = await TrainingJob.findOneAndUpdate(
-                { job_id: jobId },
-                { $set: updates },
-                { new: true, runValidators: true }
-            );
+            const ref = this._col().doc(jobId);
+            const snap = await ref.get();
+            if (!snap.exists) throw new Error('Job not found');
 
-            if (!job) {
-                throw new Error('Job not found');
-            }
+            const payload = { ...updates, updated_at: new Date() };
+            await ref.update(payload);
 
-            console.log(`📝 Job updated: ${jobId}`);
-            return this.formatJob(job);
+            const updated = await ref.get();
+            console.log(`📝 Job updated in Firestore: ${jobId}`);
+            return this._format(updated);
 
         } catch (error) {
             console.error('❌ Error updating job:', error);
@@ -121,11 +108,12 @@ class JobModel {
 
     async listJobs(limit = 50) {
         try {
-            const jobs = await TrainingJob.find()
-                .sort({ createdAt: -1 })
-                .limit(limit);
+            const snap = await this._col()
+                .orderBy('created_at', 'desc')
+                .limit(limit)
+                .get();
 
-            return jobs.map(job => this.formatJob(job));
+            return snap.docs.map(doc => this._format(doc));
 
         } catch (error) {
             console.error('❌ Error listing jobs:', error);
@@ -135,23 +123,17 @@ class JobModel {
 
     async addJobLog(jobId, logEntry) {
         try {
-            const job = await TrainingJob.findOneAndUpdate(
-                { job_id: jobId },
-                { 
-                    $push: { 
-                        logs: { 
-                            message: logEntry,
-                            timestamp: new Date()
-                        } 
-                    } 
-                },
-                { new: true }
-            );
+            const ref = this._col().doc(jobId);
+            const snap = await ref.get();
+            if (!snap.exists) throw new Error('Job not found');
 
-            if (!job) {
-                throw new Error('Job not found');
-            }
+            const existing = snap.data().logs || [];
+            existing.push({ message: logEntry, timestamp: new Date().toISOString() });
 
+            // Keep last 200 log entries to avoid doc size limit
+            const trimmed = existing.slice(-200);
+
+            await ref.update({ logs: trimmed, updated_at: new Date() });
             console.log(`📝 Log added to job: ${jobId}`);
 
         } catch (error) {
@@ -162,51 +144,32 @@ class JobModel {
 
     async getJobsByStatus(status) {
         try {
-            const jobs = await TrainingJob.find({ status })
-                .sort({ createdAt: 1 });
+            const snap = await this._col()
+                .where('status', '==', status)
+                .orderBy('created_at', 'asc')
+                .get();
 
-            return jobs.map(job => this.formatJob(job));
+            return snap.docs.map(doc => this._format(doc));
 
         } catch (error) {
-            console.error('❌ Error getting jobs by status:', error);
-            throw new Error(`Failed to get jobs by status: ${error.message}`);
+            // Firestore requires a composite index for where+orderBy — fall back gracefully
+            console.warn('⚠️ getJobsByStatus fallback (index may be missing):', error.message);
+            const all = await this.listJobs(200);
+            return all.filter(j => j.status === status);
         }
-    }
-
-    formatJob(job) {
-        // Convert MongoDB document to plain object with ISO dates
-        const jobObj = job.toObject ? job.toObject() : job;
-        
-        return {
-            job_id: jobObj.job_id,
-            project_name: jobObj.project_name,
-            training_script: jobObj.training_script,
-            status: jobObj.status,
-            progress: jobObj.progress,
-            resources: jobObj.resources,
-            config: jobObj.config,
-            logs: jobObj.logs || [],
-            error_message: jobObj.error_message,
-            gpu_id: jobObj.gpu_id,
-            worker_node: jobObj.worker_node,
-            duration: jobObj.duration,
-            created_at: jobObj.createdAt?.toISOString(),
-            updated_at: jobObj.updatedAt?.toISOString(),
-            started_at: jobObj.started_at?.toISOString(),
-            completed_at: jobObj.completed_at?.toISOString()
-        };
     }
 
     async deleteJob(jobId) {
         try {
-            const job = await TrainingJob.findOneAndDelete({ job_id: jobId });
-            
-            if (!job) {
-                throw new Error('Job not found');
-            }
+            const ref = this._col().doc(jobId);
+            const snap = await ref.get();
+            if (!snap.exists) throw new Error('Job not found');
 
-            console.log(`🗑️ Job deleted: ${jobId}`);
-            return this.formatJob(job);
+            const formatted = this._format(snap);
+            await ref.delete();
+
+            console.log(`🗑️ Job deleted from Firestore: ${jobId}`);
+            return formatted;
 
         } catch (error) {
             console.error('❌ Error deleting job:', error);
@@ -215,10 +178,9 @@ class JobModel {
     }
 }
 
-// Create singleton instance
+// Singleton
 const jobModel = new JobModel();
 
 module.exports = {
     JobModel: jobModel,
-    TrainingJob
 };

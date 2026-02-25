@@ -1,0 +1,19 @@
+project:
+  name: "review 3"
+  description: "classification of images using a CNN model"
+  version: "1.0.0"
+
+training:
+  script: "train.py"
+  framework: "pytorch"
+
+resources:
+  gpu: 1
+  memory_gb: 15
+  cpu_cores: 2
+
+metadata:
+  author: "TrainForge User"
+  date: "2025-11-06"
+  demo: true
+  presentation: true

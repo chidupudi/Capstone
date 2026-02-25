@@ -1,0 +1,167 @@
+/* File: trainforge/dashboard/src/pages/Workers.css */
+
+.workers-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.workers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Stat Cards */
+.stat-card {
+  text-align: center;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.online {
+  border-left: 3px solid #52c41a;
+}
+
+.stat-card.busy {
+  border-left: 3px solid #faad14;
+}
+
+.stat-card.idle {
+  border-left: 3px solid #52c41a;
+}
+
+.stat-card.gpu {
+  border-left: 3px solid #722ed1;
+}
+
+.stat-card.jobs {
+  border-left: 3px solid #13c2c2;
+}
+
+/* Shard Cards */
+.shard-card {
+  min-height: 120px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.shard-card.online {
+  border: 2px solid #52c41a;
+  background: linear-gradient(135deg, #f6ffed 0%, #fff 100%);
+}
+
+.shard-card.busy {
+  border: 2px solid #faad14;
+  background: linear-gradient(135deg, #fffbe6 0%, #fff 100%);
+  animation: pulse 2s infinite;
+}
+
+.shard-card.offline {
+  border: 2px solid #d9d9d9;
+  background: #fafafa;
+  opacity: 0.7;
+}
+
+.shard-card.empty {
+  border: 2px dashed #d9d9d9;
+  background: #fafafa;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(250, 173, 20, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(250, 173, 20, 0);
+  }
+}
+
+.shard-header {
+  margin-bottom: 12px;
+}
+
+.shard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shard-content .gpu-info {
+  font-size: 12px;
+  color: #666;
+}
+
+.shard-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* Table Rows */
+.row-offline {
+  background-color: #fafafa !important;
+  opacity: 0.6;
+}
+
+.row-busy {
+  background-color: #fffbe6 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .workers-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Animation for live updates */
+.live-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #52c41a;
+  margin-right: 8px;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}

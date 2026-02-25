@@ -1,0 +1,21 @@
+project:
+  name: mnist-distributed
+  description: MNIST CNN with 4-worker distributed training
+
+training:
+  script: train_distributed.py
+  requirements: requirements.txt
+
+resources:
+  gpu: 1
+  cpu: 2
+  memory: 4Gi
+
+distributed:
+  enabled: true
+  num_workers: 4
+  aggregation: fedavg
+
+environment:
+  python_version: "3.9"
+  base_image: pytorch/pytorch:latest

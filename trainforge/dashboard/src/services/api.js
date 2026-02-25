@@ -2,6 +2,7 @@
 // API service for communicating with TrainForge backend
 
 import axios from 'axios';
+import { auth } from './firebase';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
@@ -14,9 +15,28 @@ const api = axios.create({
   },
 });
 
-// Request interceptor for logging
+// Request interceptor for logging and attaching token
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // 1. Admin token takes priority (admin login via API)
+    const adminToken = localStorage.getItem('tf_admin_token');
+    if (adminToken && adminToken !== 'null' && adminToken !== 'undefined') {
+      config.headers.Authorization = `Bearer ${adminToken}`;
+    } else {
+      // 2. Fall back to Firebase ID token
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        } catch (error) {
+          console.error('Error getting Firebase token:', error);
+        }
+      }
+    }
+
     console.log(`🔍 API Request: ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   },
@@ -37,6 +57,8 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export { api };
 
 export const trainForgeAPI = {
   // Health check
@@ -85,7 +107,7 @@ export const trainForgeAPI = {
     try {
       const response = await api.get('/api/jobs');
       const jobs = response.data.jobs || [];
-      
+
       const stats = {
         total: jobs.length,
         pending: jobs.filter(job => job.status === 'pending').length,
@@ -110,15 +132,29 @@ export const trainForgeAPI = {
   },
 
   // File upload helper
+  async getWorkerStats() {
+    try {
+      const response = await api.get('/api/workers/stats/all');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get worker stats:', error);
+      return {
+        total_workers: 0,
+        gpu_workers: 0,
+        by_status: { busy: 0, idle: 0 }
+      };
+    }
+  },
+
   createJobFormData(config, files) {
     const formData = new FormData();
     formData.append('config', JSON.stringify(config));
-    
+
     if (files && files.length > 0) {
       // Create a zip file from multiple files (simplified for demo)
       formData.append('project_zip', files[0]);
     }
-    
+
     return formData;
   },
 };

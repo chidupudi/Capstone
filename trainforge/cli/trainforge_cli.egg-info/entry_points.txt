@@ -1,2 +1,3 @@
 [console_scripts]
 trainforge = trainforge.main:cli
+

@@ -1,0 +1,4 @@
+name: "Healthcare-LLM-Adaptation"
+description: "Fine-tuning distilgpt2 for medical terminology"
+install: "requirements.txt"
+run: "main.py"

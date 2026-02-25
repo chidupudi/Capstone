@@ -55,7 +55,7 @@ const SubmitJob = ({ onNavigate }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files);
     }
@@ -69,7 +69,7 @@ const SubmitJob = ({ onNavigate }) => {
   // Submit job
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.projectName.trim()) {
       toast.error('Project name is required');
       return;
@@ -81,7 +81,7 @@ const SubmitJob = ({ onNavigate }) => {
     }
 
     setSubmitting(true);
-    
+
     try {
       // Create job configuration
       const config = {
@@ -107,7 +107,7 @@ const SubmitJob = ({ onNavigate }) => {
       // Create form data for submission
       const submitFormData = new FormData();
       submitFormData.append('config', JSON.stringify(config));
-      
+
       // Add files (for simplicity, we'll use the first file as project_zip)
       if (files[0]) {
         submitFormData.append('project_zip', files[0]);
@@ -115,14 +115,14 @@ const SubmitJob = ({ onNavigate }) => {
 
       // Submit the job
       const response = await trainForgeAPI.submitJob(submitFormData);
-      
+
       toast.success(`Job submitted successfully! ID: ${response.job_id?.slice(0, 8)}...`);
-      
+
       // Navigate back to dashboard
       setTimeout(() => {
         onNavigate && onNavigate('dashboard');
       }, 1500);
-      
+
     } catch (error) {
       console.error('Job submission failed:', error);
       toast.error('Failed to submit job. Please try again.');
@@ -132,50 +132,44 @@ const SubmitJob = ({ onNavigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => onNavigate && onNavigate('dashboard')}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Submit Training Job
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Upload your training files and configure your job
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-50" style={{ paddingBottom: 64 }}>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Page Title & Back Button */}
+        <div className="flex items-center gap-4 mb-8">
+          <button
+            onClick={() => onNavigate && onNavigate('dashboard')}
+            className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 shadow-sm rounded-xl transition-all hover:scale-105"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-tf-blue to-tf-purple tracking-tight">
+              Submit Training Job
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Upload your training files and configure your compute environment.
+            </p>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Project Information */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700"
+            className="bg-white rounded-xl shadow-lg border border-slate-100"
           >
             <div className="flex items-center gap-2 mb-6">
-              <FileText className="w-5 h-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <FileText className="w-5 h-5 text-tf-blue" />
+              <h2 className="text-lg font-semibold text-slate-900">
                 Project Information
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Project Name *
                 </label>
                 <input
@@ -184,13 +178,13 @@ const SubmitJob = ({ onNavigate }) => {
                   value={formData.projectName}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                   placeholder="my-training-project"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Training Script
                 </label>
                 <input
@@ -198,13 +192,13 @@ const SubmitJob = ({ onNavigate }) => {
                   name="trainingScript"
                   value={formData.trainingScript}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                   placeholder="train.py"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Description
                 </label>
                 <textarea
@@ -212,7 +206,7 @@ const SubmitJob = ({ onNavigate }) => {
                   value={formData.description}
                   onChange={handleInputChange}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                   placeholder="Brief description of your training job..."
                 />
               </div>
@@ -224,33 +218,32 @@ const SubmitJob = ({ onNavigate }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700"
+            className="bg-white rounded-xl shadow-lg border border-slate-100"
           >
             <div className="flex items-center gap-2 mb-6">
               <Upload className="w-5 h-5 text-green-500" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-lg font-semibold text-slate-900">
                 Upload Files
               </h2>
             </div>
 
             {/* Drag and Drop Area */}
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                dragActive
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-300 dark:border-gray-600'
-              }`}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive
+                ? 'border-tf-blue bg-tf-blue/10'
+                : 'border-slate-300'
+                }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
             >
-              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
               <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <p className="text-lg font-medium text-slate-900 mb-2">
                   Drop your files here
                 </p>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-slate-500 mb-4">
                   or click to browse
                 </p>
                 <input
@@ -262,7 +255,7 @@ const SubmitJob = ({ onNavigate }) => {
                 />
                 <label
                   htmlFor="file-upload"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-tf-blue hover:bg-tf-blue/90 text-white rounded-lg cursor-pointer transition-colors"
                 >
                   <Upload className="w-4 h-4" />
                   Browse Files
@@ -273,22 +266,22 @@ const SubmitJob = ({ onNavigate }) => {
             {/* File List */}
             {files.length > 0 && (
               <div className="mt-6">
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <h4 className="text-sm font-medium text-slate-700 mb-3">
                   Selected Files ({files.length})
                 </h4>
                 <div className="space-y-2">
                   {files.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-blue-500" />
+                        <FileText className="w-4 h-4 text-tf-blue" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          <p className="text-sm font-medium text-slate-900">
                             {file.name}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-slate-500">
                             {(file.size / 1024).toFixed(1)} KB
                           </p>
                         </div>
@@ -312,18 +305,18 @@ const SubmitJob = ({ onNavigate }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700"
+            className="bg-white rounded-xl shadow-lg border border-slate-100"
           >
             <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-purple-500" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <Settings className="w-5 h-5 text-tf-purple" />
+              <h2 className="text-lg font-semibold text-slate-900">
                 Resource Configuration
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
                   <Cpu className="w-4 h-4" />
                   GPU Count
                 </label>
@@ -331,7 +324,7 @@ const SubmitJob = ({ onNavigate }) => {
                   name="gpu"
                   value={formData.gpu}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                 >
                   <option value={1}>1 GPU</option>
                   <option value={2}>2 GPUs</option>
@@ -341,14 +334,14 @@ const SubmitJob = ({ onNavigate }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   CPU Cores
                 </label>
                 <select
                   name="cpu"
                   value={formData.cpu}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                 >
                   <option value={2}>2 Cores</option>
                   <option value={4}>4 Cores</option>
@@ -358,7 +351,7 @@ const SubmitJob = ({ onNavigate }) => {
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
                   <HardDrive className="w-4 h-4" />
                   Memory
                 </label>
@@ -366,7 +359,7 @@ const SubmitJob = ({ onNavigate }) => {
                   name="memory"
                   value={formData.memory}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                 >
                   <option value="4Gi">4 GB</option>
                   <option value="8Gi">8 GB</option>
@@ -379,14 +372,14 @@ const SubmitJob = ({ onNavigate }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Python Version
                 </label>
                 <select
                   name="pythonVersion"
                   value={formData.pythonVersion}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                 >
                   <option value="3.8">Python 3.8</option>
                   <option value="3.9">Python 3.9</option>
@@ -396,14 +389,14 @@ const SubmitJob = ({ onNavigate }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Base Image
                 </label>
                 <select
                   name="baseImage"
                   value={formData.baseImage}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-tf-blue"
                 >
                   <option value="pytorch/pytorch:latest">PyTorch Latest</option>
                   <option value="tensorflow/tensorflow:latest-gpu">TensorFlow GPU</option>
@@ -424,15 +417,15 @@ const SubmitJob = ({ onNavigate }) => {
             <button
               type="button"
               onClick={() => onNavigate && onNavigate('dashboard')}
-              className="px-6 py-3 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="px-6 py-3 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
-            
+
             <button
               type="submit"
               disabled={submitting || files.length === 0}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-3 bg-tf-blue hover:bg-tf-blue/90 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
             >
               {submitting ? (
                 <>

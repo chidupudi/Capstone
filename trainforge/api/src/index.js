@@ -8,10 +8,13 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-// Import MongoDB and routes
-const mongoDB = require('./db/mongodb');
+// Import Firebase and routes
+const firebaseDB = require('./db/firebase');
 const jobRoutes = require('./routes/jobs');
 const workerRoutes = require('./routes/workers');
+const configRoutes = require('./routes/config');
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +28,9 @@ app.use(helmet());
 app.use(compression());
 
 // Rate limiting with better configuration
+// Trust the first proxy (e.g. ngrok, load balancer) so express-rate-limit gets the correct IP
+app.set('trust proxy', 1);
+
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Increased limit for external workers
@@ -34,10 +40,11 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS configuration
+// CORS configuration — open to all so Colab/Kaggle workers can connect
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
-    credentials: true
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'User-Agent']
 }));
 
 // Body parsing middleware
@@ -81,7 +88,7 @@ app.get('/health', async (req, res) => {
             timestamp: new Date().toISOString(),
             version: '0.1.0',
             service: 'trainforge-api',
-            database: mongoDB.isConnected ? 'connected' : 'disconnected',
+            database: firebaseDB.isConnected ? 'connected' : 'disconnected',
             uptime: Math.floor(uptime),
             memory: {
                 rss: Math.round(memUsage.rss / 1024 / 1024 * 100) / 100,
@@ -105,16 +112,19 @@ app.get('/health', async (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/workers', workerRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
     res.json({
         message: 'TrainForge API Server',
         version: '0.1.0',
-        database: 'MongoDB',
-        status: mongoDB.isConnected ? 'healthy' : 'database_disconnected',
+        database: 'Firebase Firestore',
+        status: firebaseDB.isConnected ? 'healthy' : 'database_disconnected',
         endpoints: {
             health: '/health',
             jobs: '/api/jobs',
@@ -188,19 +198,13 @@ function logMemoryUsage() {
     }
 }
 
-// Database connection health monitoring
+// Firebase connection health monitoring (Firebase handles reconnect internally)
 function monitorDatabase() {
-    if (!mongoDB.isConnected) {
-        console.warn('⚠️ Database connection lost, attempting to reconnect...');
-
-        // Attempt reconnection
-        mongoDB.connect()
-            .then(() => {
-                console.log('🔄 Database reconnected successfully');
-            })
-            .catch((error) => {
-                console.error('❌ Database reconnection failed:', error.message);
-            });
+    if (!firebaseDB.isConnected) {
+        console.warn('⚠️ Firebase connection lost, attempting to reinitialize...');
+        firebaseDB.connect()
+            .then(() => console.log('🔄 Firebase reconnected successfully'))
+            .catch((error) => console.error('❌ Firebase reconnection failed:', error.message));
     }
 }
 
@@ -211,14 +215,14 @@ async function startServer() {
         console.log(`📝 Process ID: ${process.pid}`);
         console.log(`💾 Node.js version: ${process.version}`);
 
-        // Connect to MongoDB
-        await mongoDB.connect();
+        // Connect to Firebase Firestore
+        await firebaseDB.connect();
 
         // Start the server
         const server = app.listen(PORT, () => {
             console.log(`✅ Server running on http://localhost:${PORT}`);
             console.log(`📊 Health check: http://localhost:${PORT}/health`);
-            console.log('🍃 MongoDB connected successfully');
+            console.log('🔥 Firebase Firestore connected successfully');
         });
 
         // Set server timeouts to prevent hanging connections
@@ -260,8 +264,8 @@ function setupGracefulShutdown(server) {
                 console.log('🚪 HTTP server closed');
             }
 
-            // Close MongoDB connection
-            mongoDB.disconnect()
+            // Close Firebase connection
+            firebaseDB.disconnect()
                 .then(() => {
                     console.log('✅ Graceful shutdown completed');
                     process.exit(0);
