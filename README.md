@@ -1,146 +1,137 @@
-# TrainForge - Distributed AI Training Platform
+# TrainForge 🚀
 
-🚀 **Simple distributed AI training with just 3 commands: `trainforge init`, `trainforge push`, done!**
+**TrainForge** is a distributed AI training platform that allows you to run machine-learning workloads on **free external GPUs** (Google Colab, Kaggle) directly from your **local terminal**.
 
-TrainForge is a complete distributed AI training platform that handles GPU allocation, container orchestration, and training execution automatically.
+You define your job in a simple `trainforge.yaml`, run `trainforge submit`, and TrainForge:
+- Packages your code
+- Sends it securely via tunnel
+- Orchestrates distributed GPU workers
+- Runs training
+- Retrieves results back locally
 
-## ⚡ Quick Start
+No expensive GPUs. No cloud VM management.
 
-### 🚀 **Option 1: Automated (Recommended)**
+---
 
-**Windows (Command Prompt):**
-```cmd
-# 1. Start all services
-start-trainforge.bat
+## 🏗️ Architecture Component Map
 
-# 2. Setup environment & create project
-cd trainforge\cli
-call set_env.bat
-mkdir my-ai-project && cd my-ai-project
-trainforge init --name "my-model-training"
+```mermaid
+flowchart TD
 
-# 3. Submit job
-trainforge push
+    subgraph LocalEnvironment["Local Machine / Private Network"]
+        CLI["TrainForge CLI (Python)"]
+        Dashboard["Dashboard (React :3001)"]
+        API["API Server (Node.js :3000)"]
+        DB[("Firestore / MongoDB")]
+        LocalWorker["Local GPU Worker (Python)"]
+
+        CLI -->|Submit Jobs / Status| API
+        Dashboard -->|Metrics / Logs| API
+        API -->|Read / Write| DB
+        LocalWorker -->|Polling / Heartbeat| API
+    end
+
+    subgraph TunnelLayer["Secure Tunnel Layer"]
+        Tunnel["Cloudflare Tunnel / ngrok"]
+    end
+
+    API <-->|Public HTTPS| Tunnel
+
+    subgraph CloudGPUs["External GPU Providers"]
+        ColabMaster["Colab GPU Worker (Master)"]
+        ColabWorker["Colab GPU Worker (Worker)"]
+        KaggleWorker["Kaggle GPU Worker"]
+    end
+
+    ColabMaster -->|Register / Logs / Results| Tunnel
+    ColabWorker -->|Register / Logs / Results| Tunnel
+    KaggleWorker -->|Register / Logs / Results| Tunnel
+
+    ColabWorker -.->|torchrun TCP :29500| ColabMaster
 ```
 
-**Windows (PowerShell):**
-```powershell
-# 1. Start all services
-.\start-trainforge.bat
+---
 
-# 2. Setup environment & create project
-cd trainforge\cli
-.\set_env.ps1
-New-Item -ItemType Directory -Name "my-ai-project" -Force | Out-Null; cd my-ai-project
-trainforge init --name "my-model-training"
+## 🔄 End-to-End Distributed Training Flow
 
-# 3. Submit job
-trainforge push
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI as TrainForge CLI
+    participant API as API Server
+    participant Tunnel as Secure Tunnel
+    participant Master as Colab Master Worker
+    participant Worker as Colab Worker
+
+    User->>CLI: trainforge submit
+    CLI->>API: POST /api/jobs/distributed
+    API-->>CLI: job_id (Pending)
+
+    loop Poll for jobs
+        Master->>Tunnel: GET /api/jobs/pending
+        Tunnel->>API: Forward request
+        API-->>Master: Pending job
+    end
+
+    Master->>Tunnel: POST /api/jobs/{id}/claim
+    Tunnel->>API: Forward request
+    API-->>Master: rank = 0, world_size = 2
+
+    Worker->>Tunnel: POST /api/jobs/{id}/claim
+    Tunnel->>API: Forward request
+    API-->>Worker: rank = 1, master_addr
+
+    Note over Master,Worker: torchrun initialization
+
+    Master->>Master: Open TCP :29500
+    Worker->>Master: Connect to :29500
+
+    Note over Master,Worker: Distributed training running
+
+    Master->>Tunnel: PUT /api/jobs/{id}/status
+    Tunnel->>API: Upload results
+    API-->>Master: 200 OK
+
+    User->>CLI: trainforge status {job_id}
+    CLI->>API: GET /api/jobs/{job_id}
+    API-->>CLI: Job completed
 ```
 
-**Linux/macOS:**
+---
+
+## 💻 Python CLI Quickstart
+
+### Installation
+
 ```bash
-# 1. Start all services
-./start-trainforge.sh
-
-# 2. Setup environment & create project
-cd trainforge/cli
-source set_env.sh
-mkdir my-ai-project && cd my-ai-project
-trainforge init --name "my-model-training"
-
-# 3. Submit job
-trainforge push
+pip install -e .
 ```
 
-### 🔧 **Option 2: Manual Component Control**
+Verify:
 
-**Windows (Command Prompt):**
-```cmd
-# Terminal 1: Database
-mongod --dbpath ./data/db
-
-# Terminal 2: API Server
-cd trainforge\api && npm start
-
-# Terminal 3: Dashboard
-cd trainforge\dashboard && npm start
-
-# Terminal 4: Setup Python Environment
-cd trainforge\cli
-call set_env.bat
-
-# Terminal 5: Scheduler (in same environment)
-cd ..\scheduler && python src\job_scheduler.py
-
-# Terminal 6: Worker Node (in same environment)
-cd ..\worker && python worker.py
-
-# Terminal 7: Submit Jobs
-cd my-project && trainforge push
-```
-
-**Windows (PowerShell):**
-```powershell
-# Terminal 1: Database
-mongod --dbpath ./data/db
-
-# Terminal 2: API Server
-cd trainforge\api; npm start
-
-# Terminal 3: Dashboard
-cd trainforge\dashboard; npm start
-
-# Terminal 4: Setup Python Environment
-cd trainforge\cli
-.\set_env.ps1
-
-# Terminal 5: Scheduler (in same environment)
-cd ..\scheduler; python src\job_scheduler.py
-
-# Terminal 6: Worker Node (in same environment)
-cd ..\worker; python worker.py
-
-# Terminal 7: Submit Jobs
-cd my-project; trainforge push
-```
-
-**Linux/macOS:**
 ```bash
-# Terminal 1: Database
-mongod --dbpath ./data/db
-
-# Terminal 2: API Server
-cd trainforge/api && npm start
-
-# Terminal 3: Dashboard
-cd trainforge/dashboard && npm start
-
-# Terminal 4: Setup Python Environment
-cd trainforge/cli
-source set_env.sh
-
-# Terminal 5: Scheduler (in same environment)
-cd ../scheduler && python src/job_scheduler.py
-
-# Terminal 6: Worker Node (in same environment)
-cd ../worker && python worker.py
-
-# Terminal 7: Submit Jobs
-cd my-project && trainforge push
+trainforge --help
 ```
 
-**📖 [Full Setup Guide](./SETUP.md)** | **🏃 [Worker Nodes Guide](./trainforge/workers/README.md)**
+---
 
-## 📁 Project Structure
+### Initialize Project
 
-Your project needs just 2 files:
+```bash
+trainforge init
+```
 
-### `trainforge.yaml` (Auto-generated)
+Creates:
+- `train.py`
+- `trainforge.yaml`
+
+---
+
+### Example `trainforge.yaml`
+
 ```yaml
 project:
-  name: my-model-training
-  description: AI training project created with TrainForge
+  name: llama-finetune
 
 training:
   script: train.py
@@ -148,260 +139,39 @@ training:
 
 resources:
   gpu: 1
-  cpu: 2
-  memory: 4Gi
-
-environment:
-  python_version: '3.9'
-  base_image: pytorch/pytorch:latest
-```
-
-### `train.py` (Your training code)
-```python
-import torch
-import os
-
-def main():
-    # Get TrainForge job info
-    job_id = os.environ.get('TRAINFORGE_JOB_ID', 'local')
-    gpu_id = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
-
-    print(f"🚀 Starting training job {job_id} on GPU {gpu_id}")
-
-    # Your training code here
-    model = torch.nn.Linear(10, 1)
-    if torch.cuda.is_available():
-        model = model.cuda()
-        print(f"✅ Using GPU: {torch.cuda.get_device_name()}")
-
-    # Training loop
-    for epoch in range(10):
-        # Your training logic
-        print(f"Epoch {epoch+1}/10 completed")
-
-    print("✅ Training completed!")
-
-if __name__ == "__main__":
-    main()
-```
-
-## 🔧 Advanced Usage
-
-### Multi-GPU Training
-```yaml
-resources:
-  gpu: 4  # Request 4 GPUs
   memory: 16Gi
 ```
 
-### Custom Environment
-```yaml
-environment:
-  base_image: nvidia/pytorch:23.08-py3
-  env:
-    NCCL_DEBUG: INFO
-    CUDA_LAUNCH_BLOCKING: 1
-```
+---
 
-### Dependencies
-```yaml
-training:
-  requirements: requirements.txt  # Your pip dependencies
-```
-
-## 📊 Monitoring
-
-- **Dashboard**: http://localhost:3001 - Real-time job monitoring
-- **CLI Status**: `trainforge status` - Check job progress
-- **Detailed Logs**: `trainforge status <job_id>` - View specific job
-
-## 🌐 External GPU Support
-
-TrainForge can connect to external GPUs:
-
-- **Google Colab** - Add TrainForge endpoint
-- **Kaggle Kernels** - Connect via API
-- **GCP/AWS** - Remote GPU clusters
-- **Local GPUs** - Automatic detection
-
-*External GPU setup instructions coming soon*
-
-## 🔍 How It Works
-
-1. **CLI** packages your code and submits to API
-2. **API** stores files and creates job in database
-3. **Scheduler** allocates GPUs and starts workers
-4. **Workers** run your training in containers/processes
-5. **Dashboard** shows real-time progress
-
-## 📋 Commands
+### Submit Job
 
 ```bash
-trainforge init [--name PROJECT_NAME]     # Initialize project
-trainforge push [--config trainforge.yaml] # Submit job
-trainforge status [JOB_ID]                # Check status
-trainforge --help                         # Show help
+trainforge submit .
 ```
 
-## 🛠️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   CLI Tool      │───▶│   API Server    │───▶│   Scheduler     │
-│ (Job Submit)    │    │ (Job Storage)   │    │ (GPU Manager)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                        │
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   Dashboard     │    │   Workers       │
-                       │ (Monitoring)    │    │ (Training)      │
-                       └─────────────────┘    └─────────────────┘
-```
-
-## 🎯 Key Features
-
-✅ **Zero Configuration** - Works out of the box
-✅ **Auto GPU Detection** - Finds available GPUs automatically
-✅ **Multi-GPU Support** - Distributed training across GPUs
-✅ **Container Orchestration** - Docker + fallback to subprocess
-✅ **Real-time Monitoring** - Live dashboard and CLI status
-✅ **Resource Management** - CPU/GPU allocation and monitoring
-✅ **Job Scheduling** - Priority-based queue management
-✅ **Worker Nodes** - Scalable distributed execution
-✅ **External GPU Ready** - Connect to cloud GPUs
-
-## 🧪 **Complete ML Example**
-
-**[Distributed Image Classification](./examples/distributed-image-classification/)** - ResNet-50 on CIFAR-100
-
-Perfect showcase of TrainForge's power:
-- **Multi-GPU Training**: Automatic distributed training setup
-- **Resource Optimization**: 90%+ GPU utilization
-- **Easy Scaling**: Single YAML change: `gpu: 1` → `gpu: 8`
-- **Real-time Monitoring**: Live training metrics and progress
-- **Fault Tolerance**: Automatic checkpointing and recovery
-
-## 🔧 Prerequisites
-
-- Python 3.8+ (with pip)
-- Node.js 16+ (with npm)
-- MongoDB (auto-configured)
-- Docker (optional, fallback available)
-
-## 🛠️ Environment Setup
-
-TrainForge uses a **unified virtual environment** located in `trainforge/cli/venv/` for all Python components (CLI, Scheduler, Worker, Examples).
-
-### First Time Setup
-
-**Windows (Command Prompt):**
-```cmd
-# 1. Install dependencies
-start-trainforge.bat
-# Choose option 3 (Setup dependencies only)
-
-# 2. Activate environment for manual use
-cd trainforge\cli
-call set_env.bat
-```
-
-**Windows (PowerShell):**
-```powershell
-# 1. Install dependencies
-.\start-trainforge.bat
-# Choose option 3 (Setup dependencies only)
-
-# 2. Activate environment for manual use
-cd trainforge\cli
-.\set_env.ps1
-```
-
-**Linux/macOS:**
-```bash
-# 1. Install dependencies
-./start-trainforge.sh
-# Choose option 3 (Setup dependencies only)
-
-# 2. Activate environment for manual use
-cd trainforge/cli
-source set_env.sh
-```
-
-### Environment Features
-
-- ✅ **Unified Dependencies**: All Python packages in one place
-- ✅ **ML Libraries**: PyTorch, Transformers, TensorBoard pre-installed
-- ✅ **Environment Variables**: HF_HOME, TRANSFORMERS_CACHE auto-configured
-- ✅ **Cache Management**: Shared model cache directories
-- ✅ **Cross-Platform**: Works on Windows, Linux, and macOS
-
-## 🚨 Troubleshooting
-
-**Environment not working?**
-```cmd
-# Windows Command Prompt: Reset environment
-cd trainforge\cli
-call set_env.bat
-```
-
-```powershell
-# Windows PowerShell: Reset environment
-cd trainforge\cli
-.\set_env.ps1
-```
+Distributed training:
 
 ```bash
-# Linux/macOS: Reset environment
-cd trainforge/cli
-source set_env.sh
+trainforge submit . --workers 2
 ```
-
-**Transformers not loading?**
-```cmd
-# Check if transformers is installed
-python -c "import transformers; print('✅ Working')"
-
-# If not, reinstall
-cd trainforge\cli
-call venv\Scripts\activate.bat  # Windows
-pip install -r requirements.txt
-```
-
-**API not responding?**
-```bash
-cd trainforge/api && npm start
-```
-
-**Dashboard not loading?**
-```bash
-cd trainforge/dashboard && npm start
-```
-
-**Python components failing?**
-- **Command Prompt**: `cd trainforge\cli && call set_env.bat`
-- **PowerShell**: `cd trainforge\cli; .\set_env.ps1`
-- **Linux/macOS**: `cd trainforge/cli && source set_env.sh`
-- Check environment variables:
-  - Windows: `echo %HF_HOME%` (cmd) or `$env:HF_HOME` (PowerShell)
-  - Linux/macOS: `echo $HF_HOME`
-
-**Job stuck pending?**
-- Check GPU availability in dashboard
-- Verify your trainforge.yaml resource requirements
-
-**Training fails?**
-- Check logs: `trainforge status <job_id>`
-- Verify your train.py script runs locally with the unified environment
-
-## 🤝 Contributing
-
-This is a capstone project showcasing distributed AI training architecture. The system demonstrates:
-
-- Microservices architecture
-- Resource management
-- Real-time monitoring
-- Job orchestration
-- CLI tooling
 
 ---
 
-**🎉 Ready to train? Run `trainforge init` and get started!**
+### Monitor & Retrieve Results
+
+```bash
+trainforge status <job_id>
+trainforge pull <job_id>
+```
+
+---
+
+## ☁️ Connecting External GPU Workers
+
+```bash
+pip install requests
+python colab_worker.py
+```
+
+Ensure `API_URL` points to your public tunnel.

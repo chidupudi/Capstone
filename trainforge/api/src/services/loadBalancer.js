@@ -201,6 +201,40 @@ class LoadBalancer {
     }
 
     /**
+     * Select multiple workers for a distributed job
+     * Checks if enough workers are available, then selects them.
+     */
+    selectMultipleWorkers(count, jobRequirements = {}) {
+        const availableWorkers = this.getActiveWorkers();
+
+        // If job specifies GPU requirement, filter for GPU workers first
+        let candidates = availableWorkers;
+        if (jobRequirements.requires_gpu) {
+            candidates = availableWorkers.filter(w => w.gpu_available);
+        }
+
+        if (candidates.length < count) {
+            console.log(`⚠️ Not enough workers available for distributed job. Requested: ${count}, Available: ${candidates.length}`);
+            return null;
+        }
+
+        // Ideally we select workers with similar GPUs, but for simplicity, 
+        // we'll just sort them by performance and pick top 'count' workers
+        candidates.sort((a, b) => {
+            return this.calculateGPUScore(b) - this.calculateGPUScore(a);
+        });
+
+        const selectedWorkers = candidates.slice(0, count);
+
+        console.log(`🤝 Selected ${count} workers for distributed job:`);
+        selectedWorkers.forEach((w, idx) => {
+            console.log(`   Rank ${idx}: ${w.worker_id} (${w.gpu_name})`);
+        });
+
+        return selectedWorkers;
+    }
+
+    /**
      * Round Robin Strategy - Distribute evenly
      */
     selectRoundRobin(workers) {

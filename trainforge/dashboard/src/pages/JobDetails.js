@@ -14,6 +14,7 @@ const JobDetails = ({ jobId, onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [logs, setLogs] = useState([]);
   const [trainingProgress, setTrainingProgress] = useState(0);
   const [resultFiles, setResultFiles] = useState([]);
   const [loadingResults, setLoadingResults] = useState(false);
@@ -60,12 +61,20 @@ const JobDetails = ({ jobId, onNavigate }) => {
       const response = await trainForgeAPI.getJob(jobId);
       setJob(response);
 
-      // Extract progress from logs
-      if (response.status === 'running') {
-        const progress = extractProgressFromLogs(response.logs);
-        setTrainingProgress(progress);
-      } else if (response.status === 'completed') {
-        setTrainingProgress(100);
+      try {
+        const logsResponse = await trainForgeAPI.getJobLogs(jobId);
+        const fetchedLogs = logsResponse.logs || [];
+        setLogs(fetchedLogs);
+
+        // Extract progress from logs
+        if (response.status === 'running') {
+          const progress = extractProgressFromLogs(fetchedLogs);
+          setTrainingProgress(progress);
+        } else if (response.status === 'completed') {
+          setTrainingProgress(100);
+        }
+      } catch (logError) {
+        console.error('Failed to fetch job logs:', logError);
       }
 
       if (showRefreshIndicator) {
@@ -323,10 +332,10 @@ const JobDetails = ({ jobId, onNavigate }) => {
                       Training Logs
                     </h2>
                   </div>
-                  {job.logs && job.logs.length > 0 && (
+                  {logs && logs.length > 0 && (
                     <button
                       onClick={() => {
-                        const logsText = job.logs.map(log =>
+                        const logsText = logs.map(log =>
                           `[${new Date(log.timestamp).toISOString()}] ${log.message}`
                         ).join('\n');
                         const blob = new Blob([logsText], { type: 'text/plain' });
@@ -349,10 +358,10 @@ const JobDetails = ({ jobId, onNavigate }) => {
               </div>
 
               <div className="p-6">
-                {job.logs && job.logs.length > 0 ? (
-                  <div className="bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+                {logs && logs.length > 0 ? (
+                  <div className="bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto flex flex-col-reverse">
                     <div className="font-mono text-sm space-y-1">
-                      {job.logs.map((log, index) => (
+                      {logs.map((log, index) => (
                         <div key={index} className="flex gap-3">
                           <span className="text-slate-500 text-xs flex-shrink-0 mt-0.5">
                             {new Date(log.timestamp).toLocaleTimeString()}
@@ -538,7 +547,7 @@ const JobDetails = ({ jobId, onNavigate }) => {
                       project_name: job.project_name,
                       status: job.status,
                       created_at: job.created_at,
-                      logs: job.logs
+                      logs: logs
                     };
                     const blob = new Blob([JSON.stringify(jobData, null, 2)],
                       { type: 'application/json' });
@@ -682,7 +691,7 @@ const JobDetails = ({ jobId, onNavigate }) => {
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Log Entries:</span>
                   <span className="font-medium text-slate-900">
-                    {job.logs?.length || 0}
+                    {logs?.length || 0}
                   </span>
                 </div>
 

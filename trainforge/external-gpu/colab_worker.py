@@ -35,6 +35,9 @@ HEADERS = {
     'Content-Type': 'application/json',
 }
 
+log_buffer = []
+log_lock = threading.Lock()
+
 # ─── Keep Colab alive (prevents idle disconnect) ─────────────────────────────
 def _keep_alive():
     """Outputs a heartbeat every 4 minutes so Colab doesn't idle-disconnect."""
@@ -116,7 +119,9 @@ def poll_jobs():
 
 def claim_job(job_id):
     r = _req('POST', f'/api/jobs/{job_id}/claim', json={'worker_id': WORKER_ID})
-    return r is not None and r.status_code == 200
+    if r and r.status_code == 200:
+        return r.json()
+    return None
 
 def update_status(job_id, status, message=None):
     data = {'status': status}
@@ -125,8 +130,24 @@ def update_status(job_id, status, message=None):
     _req('PUT', f'/api/jobs/{job_id}/status', json=data, max_retries=2)
 
 def send_log(job_id, msg):
-    _req('POST', f'/api/jobs/{job_id}/logs',
-         json={'message': msg, 'timestamp': time.time()}, max_retries=1)
+    with log_lock:
+        log_buffer.append({'message': msg, 'timestamp': time.time()})
+
+def flush_logs(job_id):
+    with log_lock:
+        if not log_buffer:
+            return
+        batch = log_buffer[:]
+        log_buffer.clear()
+        
+    if batch:
+        _req('POST', f'/api/jobs/{job_id}/logs/batch', json={'logs': batch}, max_retries=2)
+
+def log_flusher(job_id, stop_event):
+    while not stop_event.is_set():
+        flush_logs(job_id)
+        time.sleep(3)
+    flush_logs(job_id)
 
 def download_files(job_id):
     r = _req('GET', f'/api/jobs/{job_id}/files', stream=True, timeout=120)
@@ -143,7 +164,7 @@ def download_files(job_id):
     zip_path.unlink()
     return job_dir
 
-def run_training(job_id, job_dir):
+def run_training(job_id, job_dir, dist_config=None):
     for name in ['train.py', 'main.py', 'run.py']:
         script = job_dir / name
         if script.exists():
@@ -155,16 +176,46 @@ def run_training(job_id, job_dir):
         script = py[0]
 
     print(f"📜 Running: {script.name}")
-    proc = subprocess.Popen(
-        [sys.executable, str(script)], cwd=str(job_dir),
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-    )
-    for line in proc.stdout:
-        line = line.rstrip()
-        if line:
-            print(f"  {line}", flush=True)
-            send_log(job_id, line)
-    return proc.wait() == 0
+    
+    cmd = [sys.executable, str(script)]
+    env = os.environ.copy()
+
+    if dist_config:
+        print(f"🔗 Launching via torchrun (Distributed Mode)")
+        print(f"   Rank: {dist_config.get('rank')} / {dist_config.get('world_size') - 1}")
+        print(f"   Master: {dist_config.get('master_addr')}:{dist_config.get('master_port')}")
+        
+        env['MASTER_ADDR'] = str(dist_config.get('master_addr', '127.0.0.1'))
+        env['MASTER_PORT'] = str(dist_config.get('master_port', 29500))
+        env['NODE_RANK']   = str(dist_config.get('rank', 0))
+        env['WORLD_SIZE']  = str(dist_config.get('world_size', 1))
+
+        cmd = [sys.executable, '-m', 'torch.distributed.run',
+               '--nproc_per_node=1',
+               f"--nnodes={dist_config.get('world_size', 1)}",
+               f"--node_rank={dist_config.get('rank', 0)}",
+               f"--master_addr={dist_config.get('master_addr', '127.0.0.1')}",
+               f"--master_port={dist_config.get('master_port', 29500)}",
+               str(script)]
+
+    stop_event = threading.Event()
+    flusher_thread = threading.Thread(target=log_flusher, args=(job_id, stop_event), daemon=True)
+    flusher_thread.start()
+
+    try:
+        proc = subprocess.Popen(
+            cmd, cwd=str(job_dir), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line:
+                print(f"  {line}", flush=True)
+                send_log(job_id, line)
+        return proc.wait() == 0
+    finally:
+        stop_event.set()
+        flusher_thread.join(timeout=5)
 
 def execute_job(job):
     job_id = job.get('job_id') or job.get('_id')
@@ -183,7 +234,7 @@ def execute_job(job):
                            check=True, capture_output=True)
 
         update_status(job_id, 'running', 'Training…')
-        success = run_training(job_id, job_dir)
+        success = run_training(job_id, job_dir, job.get('dist_config'))
 
         if success:
             update_status(job_id, 'completed', 'Training completed ✅')
@@ -255,7 +306,10 @@ def main():
                     if jobs:
                         job = jobs[0]
                         jid = job.get('job_id') or job.get('_id')
-                        if claim_job(jid):
+                        claim_res = claim_job(jid)
+                        if claim_res and claim_res.get('success'):
+                            job['dist_config'] = claim_res.get('dist_config')
+                            job['is_distributed'] = claim_res.get('is_distributed', False)
                             current_job = jid
                             execute_job(job)
                             current_job = None

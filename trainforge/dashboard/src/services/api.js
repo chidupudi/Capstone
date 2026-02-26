@@ -102,6 +102,11 @@ export const trainForgeAPI = {
     return response.data;
   },
 
+  async getJobLogs(jobId) {
+    const response = await api.get(`/api/jobs/${jobId}/logs`);
+    return response.data;
+  },
+
   // Statistics and monitoring
   async getJobStats() {
     try {

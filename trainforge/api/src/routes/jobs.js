@@ -92,6 +92,72 @@ router.post('/', verifyToken, upload.single('project_zip'), async (req, res) => 
     }
 });
 
+// POST /api/jobs/distributed - Submit new distributed training job
+router.post('/distributed', verifyToken, upload.single('project_zip'), async (req, res) => {
+    try {
+        console.log('📤 Received distributed job submission from user:', req.user.uid);
+
+        // Parse job configuration
+        const config = JSON.parse(req.body.config);
+        const numWorkers = parseInt(req.body.num_workers) || 2;
+        console.log(`📋 Distributed Job config: ${config.project?.name}, Workers: ${numWorkers}`);
+
+        // Validate required fields
+        if (!config.project?.name) {
+            return res.status(400).json({ error: 'Project name is required' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'Project files are required' });
+        }
+
+        // Attach user to config
+        config.user_id = req.user.uid;
+
+        // Add distributed specific flags
+        config.is_distributed = true;
+        config.num_workers = numWorkers;
+
+        // Create job in database
+        const job = await JobModel.createJob(config);
+        console.log(`✅ Distributed Job created: ${job.job_id}`);
+
+        // Store project files
+        const projectPath = `projects/${job.job_id}`;
+        await FileStorage.storeProjectFiles(req.file.path, projectPath);
+
+        // Clean up uploaded file
+        fs.unlinkSync(req.file.path);
+
+        console.log(`📋 Distributed Job queued for processing across ${numWorkers} workers`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Distributed job submitted successfully',
+            job_id: job.job_id,
+            project_name: job.project_name,
+            status: job.status,
+            resources: job.resources,
+            is_distributed: true,
+            num_workers: numWorkers,
+            created_at: job.created_at
+        });
+
+    } catch (error) {
+        console.error('❌ Distributed Job submission failed:', error);
+
+        // Clean up uploaded file on error
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        res.status(500).json({
+            error: 'Distributed job submission failed',
+            message: error.message
+        });
+    }
+});
+
 // GET /api/jobs - List all jobs
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -219,31 +285,43 @@ router.put('/:jobId', verifyToken, async (req, res) => {
     }
 });
 
-// POST /api/jobs/:jobId/logs - Add log entry
-router.post('/:jobId/logs', async (req, res) => {
+// POST /api/jobs/:jobId/logs/batch - Add multiple log entries
+router.post('/:jobId/logs/batch', async (req, res) => {
     try {
         const { jobId } = req.params;
-        const { message } = req.body;
+        const { logs } = req.body; // Array of { message, timestamp }
 
-        if (!message) {
+        if (!logs || !Array.isArray(logs) || logs.length === 0) {
             return res.status(400).json({
-                error: 'Log message is required'
+                error: 'Valid logs array is required'
             });
         }
 
-        await JobModel.addJobLog(jobId, message);
+        await JobModel.addJobLogsBatch(jobId, logs);
 
         res.json({
             success: true,
-            message: 'Log added successfully'
+            message: `Added ${logs.length} log entries`
         });
 
     } catch (error) {
-        console.error('❌ Failed to add log:', error);
+        console.error('❌ Failed to add log batch:', error);
         res.status(500).json({
-            error: 'Failed to add log',
+            error: 'Failed to add log batch',
             message: error.message
         });
+    }
+});
+
+// GET /api/jobs/:jobId/logs - Get all logs for a job
+router.get('/:jobId/logs', async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const logs = await JobModel.getJobLogs(jobId);
+        res.json({ success: true, logs });
+    } catch (error) {
+        console.error('❌ Failed to get logs:', error);
+        res.status(500).json({ error: 'Failed to get logs', message: error.message });
     }
 });
 
@@ -288,7 +366,59 @@ router.post('/:jobId/claim', async (req, res) => {
             return res.status(400).json({ error: 'worker_id is required' });
         }
 
-        // Update job status to running and assign worker
+        const currentJob = await JobModel.getJob(jobId);
+
+        if (currentJob.is_distributed) {
+            // Distributed claim logic
+            let workers = currentJob.allocated_workers || [];
+            let masterIp = currentJob.master_ip;
+
+            if (!workers.includes(worker_id)) {
+                if (workers.length >= currentJob.num_workers) {
+                    return res.status(400).json({ error: 'Job already fully allocated' });
+                }
+
+                workers.push(worker_id);
+                const updates = { allocated_workers: workers };
+
+                // First worker is Master (Rank 0)
+                if (workers.length === 1) {
+                    masterIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+                    // Strip port if ipv4 mapped standard port
+                    if (masterIp.includes(':') && masterIp.split(':').length === 2) {
+                        masterIp = masterIp.split(':')[0];
+                    }
+                    updates.master_ip = masterIp;
+                }
+
+                // If we now have enough workers, mark as running
+                if (workers.length === currentJob.num_workers) {
+                    updates.status = 'running';
+                    updates.started_at = new Date().toISOString();
+                }
+
+                await JobModel.updateJob(jobId, updates);
+                console.log(`🎯 Distributed Job ${jobId} rank ${workers.length - 1} claimed by worker ${worker_id}`);
+            }
+
+            const rank = workers.indexOf(worker_id);
+
+            return res.json({
+                success: true,
+                message: 'Distributed job claimed successfully',
+                job_id: jobId,
+                worker_id: worker_id,
+                is_distributed: true,
+                dist_config: {
+                    rank: rank,
+                    world_size: currentJob.num_workers,
+                    master_addr: masterIp || '127.0.0.1',
+                    master_port: 29500 // standard torchrun port
+                }
+            });
+        }
+
+        // Standard job logic
         const updatedJob = await JobModel.updateJob(jobId, {
             status: 'running',
             worker_id: worker_id,
@@ -357,29 +487,7 @@ router.put('/:jobId/status', async (req, res) => {
     }
 });
 
-// POST /api/jobs/:jobId/logs - Add log entry for job
-router.post('/:jobId/logs', async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        const { message, timestamp } = req.body;
 
-        // For now, just log to console (could be stored in database)
-        const logTime = timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString();
-        console.log(`📝 [${jobId}] ${logTime}: ${message}`);
-
-        res.json({
-            success: true,
-            message: 'Log entry added'
-        });
-
-    } catch (error) {
-        console.error('❌ Failed to add log:', error);
-        res.status(500).json({
-            error: 'Failed to add log',
-            message: error.message
-        });
-    }
-});
 
 // GET /api/jobs/:jobId/files - Download job files
 router.get('/:jobId/files', async (req, res) => {

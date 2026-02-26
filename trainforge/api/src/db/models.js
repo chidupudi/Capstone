@@ -26,7 +26,6 @@ class JobModel {
             progress: d.progress ?? 0,
             resources: d.resources,
             config: d.config,
-            logs: d.logs ?? [],
             error_message: d.error_message ?? null,
             gpu_id: d.gpu_id ?? null,
             worker_node: d.worker_node ?? null,
@@ -35,6 +34,10 @@ class JobModel {
             updated_at: d.updated_at?.toDate?.()?.toISOString() ?? d.updated_at ?? null,
             started_at: d.started_at?.toDate?.()?.toISOString() ?? d.started_at ?? null,
             completed_at: d.completed_at?.toDate?.()?.toISOString() ?? d.completed_at ?? null,
+            is_distributed: d.is_distributed ?? false,
+            num_workers: d.num_workers ?? null,
+            allocated_workers: d.allocated_workers ?? [],
+            master_ip: d.master_ip ?? null
         };
     }
 
@@ -54,7 +57,6 @@ class JobModel {
                 progress: 0,
                 resources: jobData.resources || { gpu: 1, cpu: 2, memory: '4Gi' },
                 config: jobData,
-                logs: [],
                 error_message: null,
                 gpu_id: null,
                 worker_node: null,
@@ -63,6 +65,10 @@ class JobModel {
                 updated_at: now,
                 started_at: null,
                 completed_at: null,
+                is_distributed: jobData.is_distributed || false,
+                num_workers: jobData.num_workers || null,
+                allocated_workers: [],
+                master_ip: null
             };
 
             await this._col().doc(job_id).set(doc);
@@ -121,24 +127,42 @@ class JobModel {
         }
     }
 
-    async addJobLog(jobId, logEntry) {
+    async addJobLogsBatch(jobId, logsBatch) {
         try {
             const ref = this._col().doc(jobId);
             const snap = await ref.get();
             if (!snap.exists) throw new Error('Job not found');
 
-            const existing = snap.data().logs || [];
-            existing.push({ message: logEntry, timestamp: new Date().toISOString() });
+            const batchRef = ref.collection('logs').doc();
+            await batchRef.set({
+                entries: logsBatch,
+                created_at: new Date()
+            });
 
-            // Keep last 200 log entries to avoid doc size limit
-            const trimmed = existing.slice(-200);
-
-            await ref.update({ logs: trimmed, updated_at: new Date() });
-            console.log(`📝 Log added to job: ${jobId}`);
+            await ref.update({ updated_at: new Date() });
+            console.log(`📝 Added log batch (${logsBatch.length} entries) to job: ${jobId}`);
 
         } catch (error) {
-            console.error('❌ Error adding job log:', error);
-            throw new Error(`Failed to add job log: ${error.message}`);
+            console.error('❌ Error adding job log batch:', error);
+            throw new Error(`Failed to add job log batch: ${error.message}`);
+        }
+    }
+
+    async getJobLogs(jobId) {
+        try {
+            const snap = await this._col().doc(jobId).collection('logs').orderBy('created_at', 'asc').get();
+            const allLogs = [];
+            snap.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.entries && Array.isArray(data.entries)) {
+                    allLogs.push(...data.entries);
+                }
+            });
+            return allLogs;
+        } catch (error) {
+            console.error('❌ Error getting job logs:', error);
+            // Don't throw to avoid breaking the UI, just return empty array
+            return [];
         }
     }
 
